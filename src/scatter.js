@@ -50,7 +50,7 @@ export function drawScatter() {
   if (+svg.attr('height') !== H) svg.attr('height', H);
   const g = svg.select('g.in').attr('transform', `translate(${M.l},${M.t})`);
 
-  // underseen quadrant field, inner edges only
+  // gem zone field, inner edges only
   const zx = x(Math.max(10, s.memThresh));
   const zy = y(s.scoreThresh);
   g.select('rect.zone')
@@ -61,7 +61,7 @@ export function drawScatter() {
   g.select('text.zlab')
     .attr('x', 8).attr('y', zy - 8)
     .style('font', '800 11px var(--font-heading)').style('letter-spacing', '0.1em')
-    .style('fill', 'var(--color-accent-700)').text('UNDERSEEN QUADRANT');
+    .style('fill', 'var(--color-accent-700)').text('GEM ZONE');
 
   // decade ticks only: scaleLog().ticks(n) ignores n and returns every minor tick
   const dom = x.domain();
@@ -119,7 +119,7 @@ export function drawScatter() {
   dots.enter().append('rect')
     .on('mouseenter', (ev, d) => {
       tip.innerHTML = `<b>${escapeHtml(d.title)}</b>${escapeHtml(metaLine(d))}`
-        + `<i>Underseen index ${d.gem > 0 ? '+' : ''}${d.gem}</i>`;
+        + `<i>Gem index ${d.gem > 0 ? '+' : ''}${d.gem}</i>`;
       const px = M.l + x(d.members);
       const py = M.t + y(d.score);
       tip.style.opacity = 1;

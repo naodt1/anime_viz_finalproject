@@ -1,31 +1,31 @@
-# Underseen
+# Hidden gem finder
 
 An interactive visualization for discovering critically well-regarded but under-viewed anime that match your personal taste.
 
 ## Research question
 
-Existing anime platforms rank titles by popularity, which conflates being widely seen with being well-liked. This project asks: can we help anime fans discover critically well-regarded but under-viewed titles that also match their personal taste (genre, format, era)?
+Existing anime platforms rank titles by popularity, which conflates being widely seen with being well-liked. This project asks: can anime fans discover critically well-regarded but under-viewed titles that also match their personal taste (genre, format, era)?
 
-## The underseen index
+## The gem index
 
-Popularity rankings conflate *widely seen* with *well liked*. Underseen separates the two. In one pass over the full dataset every title gets:
+Popularity rankings conflate *widely seen* with *well liked*. This tool separates the two. In one pass over the full dataset every title gets:
 
 ```
 sp  = percentile rank of its score      (0-100)
 mp  = percentile rank of its audience    (0-100)   // members on MyAnimeList
-gem = round(sp - mp)                               // the underseen index
+gem = round(sp - mp)                               // the gem index
 ```
 
-A title in the 95th percentile for score but the 20th for audience scores +75; a blockbuster with a mediocre score goes negative. A title is in the **underseen quadrant** when `sp >= 70 && mp <= 40`: top 30% by score, bottom 40% by audience. Percentiles are computed once on the full dataset, so filtering changes what you see, never where a title sits.
+A title in the 95th percentile for score but the 20th for audience scores +75; a blockbuster with a mediocre score goes negative. A title is in the **gem zone** when `sp >= 70 && mp <= 40`: top 30% by score, bottom 40% by audience. Percentiles are computed once on the full dataset, so filtering changes what you see, never where a title sits.
 
 ## Views
 
 One screen: a header, a persistent left filter rail, a stack of sections, and a right detail drawer that overlays.
 
-- **Score against audience size** (D3 scatter). Each square is a title, audience on a log x-axis, score on y. The red field is the underseen quadrant. Above 2,600 filtered rows the plot samples, always keeping every gem. Hover for detail, click to open the drawer.
-- **Where the gems hide** (D3 heatmap). Ten most frequent genres by five fixed eras. Each cell is the share of that genre and era that lands in the underseen quadrant, computed over the full dataset. Cells with fewer than five titles are hatched, not shown as a misleading percentage. Click a cell to cross-filter everything to that genre and decade.
+- **Score against audience size** (D3 scatter). Each square is a title, audience on a log x-axis, score on y. The red field is the gem zone. Above 2,600 filtered rows the plot samples, always keeping every gem. Hover for detail, click to open the drawer.
+- **Where the gems hide** (D3 heatmap). Ten most frequent genres by five fixed eras. Each cell is the share of that genre and era that lands in the gem zone, computed over the full dataset. Cells with fewer than five titles are hatched, not shown as a misleading percentage. Click a cell to cross-filter everything to that genre and decade.
 - **Recommended, ranked**. Filtered titles with `gem > 0 && sp >= 60`, ranked by `gem` weighted by taste match when genres are selected (`gem * (0.45 + 0.55 * match)`). Top 12, click through to the drawer.
-- **What kinds of anime are underseen?** (D3 Sankey). Genre, then format, then episode length, for the titles in the underseen quadrant under the current filters. Click a genre or format node to filter to it.
+- **What kinds of anime are hidden gems?** (D3 Sankey). Genre, then format, then episode length, for the titles in the gem zone under the current filters. Click a genre or format node to filter to it.
 - **Detail drawer**. Percentile stats, the plain-language reading, synopsis, cover art.
 - **How the index works**. The methods statement, in prose.
 

@@ -5,7 +5,7 @@ import { setState } from './state.js';
 //
 //   sp  = percentile rank of this title's score    (0-100)
 //   mp  = percentile rank of this title's members  (0-100)
-//   gem = round(sp - mp)                            // the underseen index
+//   gem = round(sp - mp)                            // the gem index
 //
 // Filtering never recomputes these. Filters change what is shown, never where
 // a title sits.

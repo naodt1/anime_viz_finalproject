@@ -115,7 +115,7 @@ export function drawHeatmap() {
     .style('cursor', (d) => (d.rate === null ? 'default' : 'pointer'))
     .on('mouseenter', (ev, d) => {
       tip.innerHTML = `<b>${d.k} · ${d.e.label}</b>`
-        + (d.n ? `${d.gems} underseen of ${d.n} titles` : 'no titles')
+        + (d.n ? `${d.gems} hidden gems of ${d.n} titles` : 'no titles')
         + (d.rate === null && d.n ? '<i>too few to rate</i>' : '');
       tip.style.opacity = 1;
       tip.style.left = Math.min(L + d.c * (cw + GAP) + 10, W - 240) + 'px';

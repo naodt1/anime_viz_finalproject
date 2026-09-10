@@ -99,7 +99,7 @@ function renderDrawer() {
   const match = sel.length
     ? Math.round((t.genres.filter((g) => sel.indexOf(g) >= 0).length / sel.length) * 100) + '%'
     : '—';
-  const badge = isGem(t) ? 'Underseen pick' : t.gem > 0 ? 'Slightly under-watched' : 'Widely seen';
+  const badge = isGem(t) ? 'Hidden gem' : t.gem > 0 ? 'Slightly under-watched' : 'Widely seen';
   const meta = [
     t.format !== 'Other' ? t.format : null,
     t.year || 'year unknown',
@@ -112,7 +112,7 @@ function renderDrawer() {
     { v: fmtN(t.members), l: 'Votes' },
     { v: ord(t.sp), l: 'Score percentile' },
     { v: ord(t.mp), l: 'Audience percentile' },
-    { v: `${t.gem > 0 ? '+' : ''}${t.gem}`, l: 'Underseen index', accent: t.gem > 0 },
+    { v: `${t.gem > 0 ? '+' : ''}${t.gem}`, l: 'Gem index', accent: t.gem > 0 },
     { v: match, l: 'Taste match' },
   ];
   const genreTags = (t.genres.length ? t.genres : ['No genre data in this file'])
@@ -190,14 +190,14 @@ function render() {
     ? `showing ${plotted.toLocaleString()} of ${rows.length.toLocaleString()} marks`
     : `${rows.length.toLocaleString()} titles plotted`;
 
-  $('heat-note').textContent = 'Share of titles in each genre and era that land in the underseen quadrant. Click a cell to filter everything to that genre and decade.';
+  $('heat-note').textContent = 'Share of titles in each genre and era that land in the gem zone. Click a cell to filter everything to that genre and decade.';
   $('heat-max-label').textContent = `gem rate ${Math.round((heatMaxRate() || 0) * 100)}%`;
 
   $('rank-note').textContent = s.genres.length
-    ? `Ranked by underseen index weighted by how well each title matches ${s.genres.join(' / ')}.`
-    : 'Ranked by underseen index. Pick genres on the left to re-rank on taste match.';
+    ? `Ranked by gem index weighted by how well each title matches ${s.genres.join(' / ')}.`
+    : 'Ranked by gem index. Pick genres on the left to re-rank on taste match.';
 
-  $('sankey-status').textContent = `${sankeyGemCount().toLocaleString()} underseen titles`;
+  $('sankey-status').textContent = `${sankeyGemCount().toLocaleString()} hidden gems`;
 
   renderRankList();
   renderDrawer();

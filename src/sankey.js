@@ -45,7 +45,7 @@ export function drawSankey() {
   if (rows.length === 0) {
     svg.attr('height', 80).append('text').attr('x', 4).attr('y', 30)
       .attr('class', 'sankey-col-label')
-      .text('No underseen titles under the current filters.');
+      .text('No hidden gems under the current filters.');
     return;
   }
 

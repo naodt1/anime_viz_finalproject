@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Underseen — anime discovery</title>
+<title>Hidden gem finder</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,16 +16,16 @@
     <div class="header-body">
       <div class="header-lede">
         <div class="kicker-row">
-          <div class="kicker">Acclaim vs. exposure</div>
+          <div class="kicker">Research question</div>
           <div class="speed"></div>
         </div>
-        <h1 class="wordmark">Underseen</h1>
-        <p class="blurb">Popularity rankings conflate widely seen with well liked. Every title here is placed by how well it scored against how many people actually watched it, so the gap becomes visible and filterable by genre, format and era.</p>
+        <h1 class="rq">Can anime fans discover critically well-regarded but under-viewed titles that also match their personal taste in genre, format and era?</h1>
+        <p class="blurb">Existing platforms rank by popularity, which conflates being widely seen with being well-liked. Every title here is placed by how well it scored against how many people actually watched it.</p>
       </div>
       <div class="dataset tone">
         <div class="dataset-label">Dataset</div>
         <div class="dataset-name" id="dataset-name">Loading…</div>
-        <div class="dataset-note">MyAnimeList via Kaggle, per-anime table. TV, Movie, OVA and ONA titles rated by at least 300 users, released 1970 or later. Percentiles are computed once over the full dataset.</div>
+        <div class="dataset-note">TV, Movie, OVA, ONA · 300+ ratings · 1970 onward</div>
       </div>
     </div>
   </header>
@@ -85,7 +85,7 @@
         </div>
         <div>
           <div class="counter-num accent" id="count-gems">0</div>
-          <div class="counter-label">Underseen</div>
+          <div class="counter-label">Hidden gems</div>
         </div>
       </div>
     </aside>
@@ -96,7 +96,7 @@
         <div class="sec-head">
           <div class="sec-head-lede">
             <h2>Score against audience size</h2>
-            <p class="sec-sub">Each mark is one title. Horizontal is audience on a log scale, vertical is score. The red field is the underseen quadrant: top 30% by score, bottom 40% by audience. Hover for detail, click to open a title.</p>
+            <p class="sec-sub">Each mark is one title. Horizontal is audience on a log scale, vertical is score. The red field is the gem zone: top 30% by score, bottom 40% by audience. Hover for detail, click to open a title.</p>
           </div>
           <div class="sec-status" id="scatter-status"></div>
         </div>
@@ -127,8 +127,8 @@
       <section class="section">
         <div class="sec-head">
           <div class="sec-head-lede">
-            <h2>What kinds of anime are underseen?</h2>
-            <p class="sec-sub">Genre, then format, then episode length, for the titles in the underseen quadrant under your current filters. Ribbon width is the number of titles. Click a genre or format node to filter everything to it.</p>
+            <h2>What kinds of anime are hidden gems?</h2>
+            <p class="sec-sub">Genre, then format, then episode length, for the titles in the gem zone under your current filters. Ribbon width is the number of titles. Click a genre or format node to filter everything to it.</p>
           </div>
           <div class="sec-status" id="sankey-status"></div>
         </div>
@@ -138,7 +138,7 @@
       <section class="method">
         <h2>How the index works</h2>
         <div class="method-cols">
-          <p>Every title gets two percentile ranks across the whole dataset: one for score, one for audience size. The <strong>underseen index</strong> is the first minus the second. A title in the 95th percentile for score but the 20th for audience scores 75; a blockbuster with a mediocre score goes negative.</p>
+          <p>Every title gets two percentile ranks across the whole dataset: one for score, one for audience size. The <strong>gem index</strong> is the first minus the second. A title in the 95th percentile for score but the 20th for audience scores 75; a blockbuster with a mediocre score goes negative.</p>
           <p>Ranking by index alone surfaces obscurity for its own sake, so when you select genres the list re-ranks on <strong>index times taste match</strong>, the share of your selected genres a title carries. Percentiles are computed once on the full dataset, so filtering changes what you see, never where a title sits.</p>
           <p>Score is a crowd average and thin vote counts are volatile, so an obscure title rated 9 by a few hundred people is a weaker signal than the index implies. Treat the quadrant as a shortlist, not a verdict.</p>
         </div>

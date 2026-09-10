@@ -5,7 +5,7 @@ import { binForEpisodes } from './episodeBins.js';
 // The bundled dataset (data/anime_data.json, built by data/build-dataset.mjs
 // from the Kaggle MAL dump) is the only data path. Vite inlines the JSON, so
 // there is no fetch. Map each record onto the shape ingest() expects, then
-// derive the underseen index.
+// derive the gem index.
 export function loadData() {
   const titles = RAW.data.map((d) => ({
     id: String(d.id),
