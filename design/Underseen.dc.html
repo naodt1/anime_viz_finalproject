@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,800;1,800&family=Noto+Sans+JP:wght@700&display=swap">
+<link rel="stylesheet" href="_ds/modernist-2cf38685-1341-4a9d-a0bf-31ee26c2c7bf/styles.css">
+<script src="_ds/modernist-2cf38685-1341-4a9d-a0bf-31ee26c2c7bf/_ds_bundle.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<style>
+  body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font-body); }
+  input[type="range"] { accent-color: var(--color-accent); width: 100%; }
+  a { color: var(--color-accent-700); }
+  a:hover { color: var(--color-accent); }
+  .tone { background-image: radial-gradient(var(--color-accent-300) 1.4px, transparent 1.5px); background-size: 7px 7px; }
+  .speed { background-image: repeating-linear-gradient(90deg, var(--color-text) 0 2px, transparent 2px 9px); }
+  .d3-tip { position: absolute; pointer-events: none; z-index: 60; background: var(--color-neutral-900); color: var(--color-neutral-100); padding: var(--space-2) var(--space-3); max-width: 250px; font: 600 11px/1.45 var(--font-body); opacity: 0; transition: opacity .08s linear; }
+  .d3-tip b { display: block; font: 800 13px/1.2 var(--font-heading); margin-bottom: 3px; }
+  .d3-tip i { display: block; font-style: normal; color: var(--color-accent-400); font-weight: 800; margin-top: 3px; }
+  .ax text { font: 600 11px var(--font-body); fill: var(--color-neutral-700); }
+  .ax line, .ax path { stroke: var(--color-divider); }
+</style>
+</helmet>
+
+<div style="min-height: 100vh; background: var(--color-bg); color: var(--color-text); font-family: var(--font-body); font-size: 15px; line-height: 1.55;">
+
+  <header style="display: flex; align-items: stretch; border-bottom: 2px solid var(--color-text);">
+    <div style="flex: 0 0 46px; background: var(--color-accent); color: var(--color-bg); display: flex; align-items: center; justify-content: center;">
+      <div style="writing-mode: vertical-rl; font-family: 'Noto Sans JP', var(--font-heading); font-weight: 700; font-size: 19px; letter-spacing: 0.22em; padding: var(--space-4) 0;">隠れた名作</div>
+    </div>
+    <div style="flex: 1 1 auto; min-width: 0; padding: var(--space-6) var(--space-6) var(--space-4); display: flex; flex-wrap: wrap; gap: var(--space-6); align-items: flex-end; justify-content: space-between;">
+      <div style="min-width: 0; flex: 1 1 420px;">
+        <div style="display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-2);">
+          <div style="font-size: 12px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-accent-700);">Acclaim vs. exposure</div>
+          <div class="speed" style="flex: 1 1 auto; height: 3px; opacity: 0.35;"></div>
+        </div>
+        <h1 style="font-family: var(--font-heading); font-weight: 800; font-style: italic; font-size: clamp(40px, 6vw, 68px); line-height: 0.95; letter-spacing: -0.035em; margin: 0 0 var(--space-3); text-transform: uppercase;">Underseen</h1>
+        <p style="margin: 0; max-width: 64ch; font-size: 15px; text-wrap: pretty;">Popularity rankings conflate widely seen with well liked. Every title here is placed by how well it scored against how many people actually watched it, so the gap becomes visible and filterable by genre, format and era.</p>
+      </div>
+      <div class="tone" style="flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); padding: var(--space-3); border: 2px solid var(--color-text); background-color: var(--color-neutral-100);">
+        <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-neutral-700);">Dataset</div>
+        <div style="font-size: 13px; font-weight: 800; max-width: 32ch;">{{ sourceLabel }}</div>
+        <label class="btn btn-primary" style="cursor: pointer; position: relative; overflow: hidden;">
+          Load your CSV
+          <input type="file" accept=".csv,text/csv" onChange="{{ onFile }}" style="position: absolute; inset: 0; opacity: 0; cursor: pointer;">
+        </label>
+        <div style="font-size: 11px; color: var(--color-neutral-700); max-width: 34ch;">{{ mappingNote }}</div>
+      </div>
+    </div>
+  </header>
+
+  <sc-if value="{{ errorMsg }}" hint-placeholder-val="{{ false }}">
+    <div style="padding: var(--space-3) var(--space-6); background: var(--color-accent-200); border-bottom: 2px solid var(--color-accent-700); font-size: 13px; font-weight: 600; color: var(--color-accent-800);">{{ errorMsg }}</div>
+  </sc-if>
+
+  <div style="display: flex; flex-wrap: wrap; align-items: stretch;">
+
+    <aside style="flex: 0 0 262px; min-width: 232px; border-right: 2px solid var(--color-divider); padding: var(--space-6) var(--space-4) var(--space-8);">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-1);">
+        <h6 style="font-size: 13px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; margin: 0;">Your taste</h6>
+        <button class="btn btn-ghost" onClick="{{ reset }}" style="font-size: 11px; padding: var(--space-1) var(--space-2);">Reset</button>
+      </div>
+      <p style="font-size: 12px; color: var(--color-neutral-700); margin: 0 0 var(--space-4);">Filters narrow both charts and the ranking at once.</p>
+
+      <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-neutral-700); margin-bottom: var(--space-2);">Genre</div>
+      <div style="display: flex; flex-wrap: wrap; gap: var(--space-1); margin-bottom: var(--space-6);">
+        <sc-for list="{{ genreOpts }}" as="g" hint-placeholder-count="12">
+          <button onClick="{{ g.toggle }}" title="{{ g.tip }}" style="font-family: var(--font-body); font-weight: 600; font-size: 12px; padding: 5px 9px; cursor: pointer; border: 1px solid {{ g.border }}; background: {{ g.bg }}; color: {{ g.fg }};" style-hover="border-color: var(--color-accent);">{{ g.name }}</button>
+        </sc-for>
+      </div>
+      <sc-if value="{{ noGenres }}" hint-placeholder-val="{{ false }}">
+        <p style="font-size: 12px; color: var(--color-neutral-700); margin: calc(-1 * var(--space-4)) 0 var(--space-6);">This file carries no genre column, so taste matching is off.</p>
+      </sc-if>
+
+      <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-neutral-700); margin-bottom: var(--space-2);">Format</div>
+      <div style="display: flex; flex-wrap: wrap; gap: var(--space-1); margin-bottom: var(--space-6);">
+        <sc-for list="{{ formatOpts }}" as="f" hint-placeholder-count="5">
+          <button onClick="{{ f.toggle }}" style="font-family: var(--font-body); font-weight: 600; font-size: 12px; padding: 5px 9px; cursor: pointer; border: 1px solid {{ f.border }}; background: {{ f.bg }}; color: {{ f.fg }};" style-hover="border-color: var(--color-accent);">{{ f.name }}</button>
+        </sc-for>
+      </div>
+
+      <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: var(--space-1);">
+        <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-neutral-700);">Era</div>
+        <div style="font-size: 12px; font-weight: 800;">{{ eraLabel }}</div>
+      </div>
+      <input type="range" min="{{ yearFloor }}" max="{{ yearCeil }}" step="1" value="{{ yearFrom }}" onChange="{{ setYearFrom }}" style="margin: 0 0 var(--space-1);">
+      <input type="range" min="{{ yearFloor }}" max="{{ yearCeil }}" step="1" value="{{ yearTo }}" onChange="{{ setYearTo }}" style="margin: 0 0 var(--space-6);">
+
+      <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: var(--space-1);">
+        <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-neutral-700);">Minimum score</div>
+        <div style="font-size: 12px; font-weight: 800;">{{ minScoreLabel }}</div>
+      </div>
+      <input type="range" min="0" max="{{ scoreCeil }}" step="{{ scoreStep }}" value="{{ minScore }}" onChange="{{ setMinScore }}" style="margin: 0 0 var(--space-6);">
+
+      <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: var(--space-1);">
+        <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-neutral-700);">Audience ceiling</div>
+        <div style="font-size: 12px; font-weight: 800;">{{ maxMembersLabel }}</div>
+      </div>
+      <input type="range" min="{{ memFloorLog }}" max="{{ memCeilLog }}" step="0.05" value="{{ maxMembersLog }}" onChange="{{ setMaxMembers }}" style="margin: 0 0 var(--space-2);">
+      <p style="font-size: 12px; color: var(--color-neutral-700); margin: 0 0 var(--space-6);">Drag left to hide the blockbusters entirely.</p>
+
+      <hr class="hr" style="margin: 0 0 var(--space-4);">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3);">
+        <div>
+          <div style="font-size: 30px; font-weight: 800; line-height: 1;">{{ shownCount }}</div>
+          <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-700);">In view</div>
+        </div>
+        <div>
+          <div style="font-size: 30px; font-weight: 800; line-height: 1; color: var(--color-accent-700);">{{ gemCount }}</div>
+          <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-700);">Underseen</div>
+        </div>
+      </div>
+    </aside>
+
+    <main style="flex: 1 1 560px; min-width: 0;">
+
+      <section style="padding: var(--space-6) var(--space-6) var(--space-6); border-bottom: 2px solid var(--color-divider);">
+        <div style="display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: baseline; justify-content: space-between; margin-bottom: var(--space-3);">
+          <div style="flex: 1 1 380px; min-width: 0;">
+            <h2 style="font-size: 24px; font-weight: 800; margin: 0 0 2px; letter-spacing: -0.015em;">Score against audience size</h2>
+            <p style="margin: 0; font-size: 13px; color: var(--color-neutral-700); max-width: 70ch;">Each mark is one title. Horizontal is audience on a log scale, vertical is score. The red field is the underseen quadrant: top 30% by score, bottom 40% by audience. Hover for detail, click to open a title.</p>
+          </div>
+          <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-700);">{{ plotNote }}</div>
+        </div>
+        <div ref="{{ scatterRef }}" style="position: relative; width: 100%; height: 470px;"></div>
+      </section>
+
+      <div style="display: flex; flex-wrap: wrap; align-items: stretch;">
+        <section style="flex: 1 1 400px; min-width: 0; padding: var(--space-6); border-right: 2px solid var(--color-divider); border-bottom: 2px solid var(--color-divider);">
+          <h2 style="font-size: 24px; font-weight: 800; margin: 0 0 2px; letter-spacing: -0.015em;">Where the gems hide</h2>
+          <p style="margin: 0 0 var(--space-4); font-size: 13px; color: var(--color-neutral-700); max-width: 62ch;">{{ heatNote }}</p>
+          <div ref="{{ heatRef }}" style="position: relative; width: 100%;"></div>
+          <div style="display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-4);">
+            <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-700);">0%</div>
+            <div style="flex: 1 1 auto; height: 10px; background: linear-gradient(90deg, var(--color-neutral-100), var(--color-accent-300), var(--color-accent), var(--color-accent-800));"></div>
+            <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-700);">gem rate {{ heatMaxLabel }}</div>
+          </div>
+          <p style="margin: var(--space-3) 0 0; font-size: 12px; color: var(--color-neutral-700);">Hatched cells hold fewer than five titles and are left blank rather than shown as noise.</p>
+        </section>
+
+        <section style="flex: 1 1 380px; min-width: 0; padding: var(--space-6); border-bottom: 2px solid var(--color-divider);">
+          <h2 style="font-size: 24px; font-weight: 800; margin: 0 0 2px; letter-spacing: -0.015em;">Recommended, ranked</h2>
+          <p style="margin: 0 0 var(--space-4); font-size: 13px; color: var(--color-neutral-700); max-width: 60ch;">{{ rankNote }}</p>
+          <div style="display: flex; flex-direction: column;">
+            <sc-for list="{{ gems }}" as="r" hint-placeholder-count="10">
+              <button onClick="{{ r.click }}" style="display: grid; grid-template-columns: {{ rankCols }}; gap: var(--space-3); align-items: center; text-align: left; background: {{ r.bg }}; border: 0; border-bottom: 1px solid var(--color-neutral-300); padding: 9px 4px; cursor: pointer; font-family: var(--font-body); color: var(--color-text); width: 100%;" style-hover="background: var(--color-accent-200);">
+                <sc-if value="{{ hasCovers }}" hint-placeholder-val="{{ false }}">
+                  <img src="{{ r.image }}" alt="" loading="lazy" onError="{{ imgFail }}" style="width: 38px; height: 54px; object-fit: cover; display: block; background: var(--color-neutral-200); border: 1px solid var(--color-divider);">
+                </sc-if>
+                <div style="font-size: 13px; font-weight: 800; color: var(--color-neutral-600); font-style: italic;">{{ r.rank }}</div>
+                <div style="min-width: 0;">
+                  <div style="font-size: 14px; font-weight: 800; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ r.title }}</div>
+                  <div style="font-size: 11px; color: var(--color-neutral-700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ r.meta }}</div>
+                  <div style="height: 4px; background: var(--color-neutral-300); margin-top: 5px;">
+                    <div style="height: 4px; width: {{ r.barW }}%; background: var(--color-accent);"></div>
+                  </div>
+                </div>
+                <div>
+                  <div style="font-size: 17px; font-weight: 800; line-height: 1;">{{ r.gemScore }}</div>
+                  <div style="font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-neutral-700);">index</div>
+                </div>
+              </button>
+            </sc-for>
+          </div>
+          <sc-if value="{{ noGems }}" hint-placeholder-val="{{ false }}">
+            <p style="margin: var(--space-3) 0 0; font-size: 13px; font-weight: 600;">Nothing clears the bar with these filters. Loosen the minimum score or widen the era.</p>
+          </sc-if>
+        </section>
+      </div>
+
+      <section style="padding: var(--space-6) var(--space-6) var(--space-8);">
+        <h6 style="font-size: 13px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; margin: 0 0 var(--space-3);">How the index works</h6>
+        <div style="display: flex; flex-wrap: wrap; gap: var(--space-6);">
+          <p style="flex: 1 1 250px; margin: 0; font-size: 13px; max-width: 46ch; text-wrap: pretty;">Every title gets two percentile ranks across the whole dataset: one for score, one for audience size. The <strong>underseen index</strong> is the first minus the second. A title in the 95th percentile for score but the 20th for audience scores 75; a blockbuster with a mediocre score goes negative.</p>
+          <p style="flex: 1 1 250px; margin: 0; font-size: 13px; max-width: 46ch; text-wrap: pretty;">Ranking by index alone surfaces obscurity for its own sake, so when you select genres the list re-ranks on <strong>index × taste match</strong> — the share of your selected genres a title carries. Percentiles are computed once on the full dataset, so filtering changes what you see, never where a title sits.</p>
+          <p style="flex: 1 1 250px; margin: 0; font-size: 13px; max-width: 46ch; text-wrap: pretty;">Score is a crowd average and thin vote counts are volatile, so an obscure title rated 9 by a few hundred people is a weaker signal than the index implies. Treat the quadrant as a shortlist, not a verdict.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <sc-if value="{{ sel }}" hint-placeholder-val="{{ false }}">
+    <div style="position: fixed; top: 0; right: 0; bottom: 0; width: 380px; max-width: 92vw; background: var(--color-bg); border-left: 2px solid var(--color-text); box-shadow: var(--shadow-lg); z-index: 200; overflow-y: auto; padding: var(--space-6) var(--space-6) var(--space-8);">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-3); margin-bottom: var(--space-3);">
+        <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-accent-700);">{{ sel.badge }}</div>
+        <button class="btn btn-ghost" onClick="{{ closeSel }}" style="font-size: 12px; padding: var(--space-1) var(--space-2);">Close</button>
+      </div>
+      <sc-if value="{{ sel.image }}" hint-placeholder-val="{{ false }}">
+        <img src="{{ sel.image }}" alt="Cover art for {{ sel.title }}" loading="lazy" onError="{{ imgFail }}" style="width: 100%; height: 300px; object-fit: cover; display: block; border: 2px solid var(--color-text); margin-bottom: var(--space-4); background: var(--color-neutral-200);">
+      </sc-if>
+      <h3 style="font-size: 26px; font-weight: 800; line-height: 1.06; letter-spacing: -0.02em; margin: 0 0 var(--space-2);">{{ sel.title }}</h3>
+      <div style="font-size: 13px; color: var(--color-neutral-700); margin-bottom: var(--space-4);">{{ sel.meta }}</div>
+      <div style="display: flex; flex-wrap: wrap; gap: var(--space-1); margin-bottom: var(--space-4);">
+        <sc-for list="{{ sel.genres }}" as="g" hint-placeholder-count="3">
+          <div class="tag tag-outline">{{ g }}</div>
+        </sc-for>
+      </div>
+      <hr class="hr" style="margin: 0 0 var(--space-4);">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4) var(--space-3);">
+        <sc-for list="{{ sel.stats }}" as="s" hint-placeholder-count="6">
+          <div>
+            <div style="font-size: 24px; font-weight: 800; line-height: 1; color: {{ s.color }};">{{ s.value }}</div>
+            <div style="font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-700); margin-top: 3px;">{{ s.label }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <hr class="hr" style="margin: var(--space-4) 0;">
+      <p style="font-size: 13px; margin: 0 0 var(--space-4);">{{ sel.reading }}</p>
+      <sc-if value="{{ sel.synopsis }}" hint-placeholder-val="{{ false }}">
+        <p style="font-size: 12px; color: var(--color-neutral-800); margin: 0;">{{ sel.synopsis }}</p>
+      </sc-if>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1320,&quot;height&quot;:940}}">
+class Component extends DCLogic {
+  state = {
+    titles: [], source: "Loading demo sample…", mapping: null, skipped: 0, error: "",
+    genres: [], formats: [], yearFrom: null, yearTo: null, minScore: 0, maxMembersLog: 7,
+    selId: null, scoreMax: 10, yLo: 3, yHi: 10, w: 0
+  };
+
+  scatterRef = React.createRef();
+  heatRef = React.createRef();
+
+  componentDidMount() {
+    this._ro = new ResizeObserver(() => {
+      cancelAnimationFrame(this._raf);
+      this._raf = requestAnimationFrame(() => {
+        const w = this.scatterRef.current ? this.scatterRef.current.clientWidth : 0;
+        if (w !== this._lastW) { this._lastW = w; this.draw(); }
+      });
+    });
+    if (this.scatterRef.current) {
+      this._lastW = this.scatterRef.current.clientWidth;
+      this._ro.observe(this.scatterRef.current);
+    }
+    import("./anime-data.js")
+      .then((m) => this.ingest(m.DEMO_TITLES, m.DEMO_LABEL, null, 0, 10))
+      .catch((e) => this.setState({ error: "Demo data failed to load: " + e.message, source: "none" }));
+  }
+
+  componentWillUnmount() { if (this._ro) this._ro.disconnect(); }
+  componentDidUpdate() { this.draw(); }
+
+  // ---------- data ----------
+  ingest(titles, source, mapping, skipped, scoreMax) {
+    const scores = titles.map((t) => t.score).sort((a, b) => a - b);
+    const mems = titles.map((t) => t.members).sort((a, b) => a - b);
+    const pct = (arr, v) => {
+      let lo = 0, hi = arr.length;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (arr[mid] < v) lo = mid + 1; else hi = mid; }
+      return arr.length < 2 ? 50 : (lo / (arr.length - 1)) * 100;
+    };
+    const q = (arr, p) => arr[Math.min(arr.length - 1, Math.max(0, Math.round(p * (arr.length - 1))))];
+    const rows = titles.map((t) => {
+      const sp = pct(scores, t.score), mp = pct(mems, t.members);
+      return Object.assign({}, t, { sp: sp, mp: mp, gem: Math.round(sp - mp) });
+    });
+    const years = rows.map((r) => r.year).filter((y) => y);
+    const yf = years.length ? Math.max(1917, Math.min.apply(null, years)) : 1960;
+    const yc = years.length ? Math.max.apply(null, years) : 2026;
+    const sMax = scoreMax || 10;
+    this.setState({
+      titles: rows, source: source, mapping: mapping, skipped: skipped, error: "",
+      scoreThresh: q(scores, 0.70), memThresh: q(mems, 0.40),
+      memMin: Math.max(10, mems[0]), memMax: mems[mems.length - 1], scoreMax: sMax,
+      yLo: Math.max(0, Math.floor((scores[0] - 0.3) * 2) / 2),
+      yHi: Math.min(sMax, Math.ceil((scores[scores.length - 1] + 0.2) * 2) / 2),
+      yearFloor: yf, yearCeil: yc, yearFrom: yf, yearTo: yc,
+      genres: [], formats: [], minScore: 0,
+      maxMembersLog: Math.log10(mems[mems.length - 1]) + 0.05, selId: null
+    });
+  }
+
+  onFile = (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    this.setState({ source: "Parsing " + f.name + "…", error: "" });
+    f.text().then((text) => Promise.all([import("./csv.js"), text])).then((r) => {
+      const out = r[0].mapRows(r[0].parseCSV(r[1], 400000));
+      if (!out.titles.length) throw new Error("No usable rows found in that file.");
+      this.ingest(out.titles, f.name + " · " + out.titles.length.toLocaleString() + " titles", out.mapping, out.skipped, out.scoreMax);
+    }).catch((err) => this.setState({ error: err.message, source: "Demo sample (upload rejected)" }));
+  };
+
+  set = (patch) => this.setState(Object.assign({ selId: null }, patch));
+
+  toggleIn = (key, v) => {
+    const cur = this.state[key];
+    this.set({ [key]: cur.indexOf(v) >= 0 ? cur.filter((x) => x !== v) : cur.concat([v]) });
+  };
+
+  filtered() {
+    const s = this.state, maxM = Math.pow(10, s.maxMembersLog);
+    return s.titles.filter((t) => {
+      if (t.score < s.minScore || t.members > maxM) return false;
+      if (t.year && (t.year < s.yearFrom || t.year > s.yearTo)) return false;
+      if (s.formats.length && s.formats.indexOf(t.format) < 0) return false;
+      if (s.genres.length && !t.genres.some((g) => s.genres.indexOf(g) >= 0)) return false;
+      return true;
+    });
+  }
+
+  isGem = (t) => t.sp >= 70 && t.mp <= 40;
+
+  eras() {
+    const s = this.state;
+    return [
+      { label: "pre-90", lo: 0, hi: 1989 }, { label: "1990s", lo: 1990, hi: 1999 },
+      { label: "2000s", lo: 2000, hi: 2009 }, { label: "2010s", lo: 2010, hi: 2019 },
+      { label: "2020s", lo: 2020, hi: 2100 }
+    ].filter((e) => e.hi >= (s.yearFloor || 0) && e.lo <= (s.yearCeil || 2100));
+  }
+
+  // rows of the heatmap: genres when the file has them, audience bands otherwise
+  heatRows() {
+    const s = this.state;
+    const c = {};
+    for (const t of s.titles) for (const g of t.genres) c[g] = (c[g] || 0) + 1;
+    const names = Object.keys(c).sort((a, b) => c[b] - c[a]).slice(0, 10);
+    if (names.length) return { kind: "genre", keys: names, test: (t, k) => t.genres.indexOf(k) >= 0 };
+    const bands = [[0, 100], [100, 1000], [1000, 10000], [10000, 100000], [100000, 1e9]]
+      .filter((b) => s.titles.some((t) => t.members >= b[0] && t.members < b[1]));
+    return {
+      kind: "audience",
+      keys: bands.map((b) => this.fmtN(b[0]) + "–" + this.fmtN(b[1])),
+      test: (t, k, i) => t.members >= bands[i][0] && t.members < bands[i][1]
+    };
+  }
+
+  ord(n) {
+    const v = Math.round(n), r = v % 100;
+    return v + (r >= 11 && r <= 13 ? "th" : ["th", "st", "nd", "rd"][v % 10] || "th");
+  }
+
+  fmtN(n) {
+    if (n >= 1e9) return "∞";
+    if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + "M";
+    if (n >= 1e3) return Math.round(n / 1e3) + "k";
+    return String(n);
+  }
+
+  meta(t) {
+    return [t.format !== "Other" ? t.format : null, t.year || "—", t.score.toFixed(2) + " score",
+      this.fmtN(t.members) + " votes"].filter(Boolean).join(" · ");
+  }
+
+  // ---------- d3 ----------
+  draw() {
+    if (!window.d3) { clearTimeout(this._t); this._t = setTimeout(() => this.draw(), 120); return; }
+    this.drawScatter();
+    this.drawHeat();
+  }
+
+  tipFor(host) {
+    let tip = host.querySelector(".d3-tip");
+    if (!tip) { tip = document.createElement("div"); tip.className = "d3-tip"; host.appendChild(tip); }
+    return tip;
+  }
+
+  drawScatter() {
+    const d3 = window.d3, host = this.scatterRef.current, s = this.state;
+    if (!host || !s.titles.length) return;
+    const W = host.clientWidth || 720, H = host.clientHeight || 470;
+    const M = { t: 12, r: 14, b: 44, l: 46 };
+    const iw = Math.max(80, W - M.l - M.r), ih = Math.max(80, H - M.t - M.b);
+    const rows = this.filtered();
+
+    const x = d3.scaleLog().domain([Math.max(10, s.memMin), Math.max(100, s.memMax)]).range([0, iw]).clamp(true);
+    const y = d3.scaleLinear().domain([s.yLo, s.yHi]).range([ih, 0]).clamp(true);
+
+    let svg = d3.select(host).select("svg.sc");
+    if (svg.empty()) {
+      svg = d3.select(host).append("svg").attr("class", "sc")
+        .style("display", "block").style("border", "2px solid var(--color-divider)")
+        .style("background", "var(--color-neutral-100)");
+      const g = svg.append("g").attr("class", "in");
+      g.append("rect").attr("class", "zone");
+      g.append("text").attr("class", "zlab");
+      g.append("g").attr("class", "ax gx");
+      g.append("g").attr("class", "ax gy");
+      g.append("g").attr("class", "grid");
+      g.append("g").attr("class", "dots");
+      svg.append("text").attr("class", "xlab");
+      svg.append("text").attr("class", "ylab");
+    }
+    if (+svg.attr("width") !== W) svg.attr("width", W);
+    if (+svg.attr("height") !== H) svg.attr("height", H);
+    const g = svg.select("g.in").attr("transform", "translate(" + M.l + "," + M.t + ")");
+
+    g.select("rect.zone")
+      .attr("x", 0).attr("y", 0)
+      .attr("width", x(Math.max(10, s.memThresh))).attr("height", y(s.scoreThresh))
+      .style("fill", "var(--color-accent)").style("fill-opacity", 0.1)
+      .style("stroke", "var(--color-accent)").style("stroke-width", 2)
+      .style("stroke-dasharray", "0," + x(Math.max(10, s.memThresh)) + "," + y(s.scoreThresh) + ",9999");
+    g.select("text.zlab")
+      .attr("x", 8).attr("y", y(s.scoreThresh) - 8)
+      .style("font", "800 11px var(--font-heading)").style("letter-spacing", "0.1em")
+      .style("fill", "var(--color-accent-700)").text("UNDERSEEN QUADRANT");
+
+    // decades only — scaleLog().ticks(n) ignores n and returns every minor tick
+    const dom = x.domain();
+    const p0 = Math.ceil(Math.log10(dom[0])), p1 = Math.floor(Math.log10(dom[1]));
+    let ticks = d3.range(p0, p1 + 1).map((p) => Math.pow(10, p));
+    if (ticks.length < 2) ticks = [dom[0], dom[1]];
+    const minor = [];
+    for (let p = p0 - 1; p <= p1; p++) for (let m = 2; m <= 9; m++) {
+      const v = m * Math.pow(10, p);
+      if (v > dom[0] && v < dom[1]) minor.push(v);
+    }
+    g.select("g.gx").attr("transform", "translate(0," + ih + ")")
+      .call(d3.axisBottom(x).tickValues(ticks).tickFormat((v) => this.fmtN(v)).tickSizeOuter(0));
+    const ml = g.select("g.gx").selectAll("line.minor").data(minor);
+    ml.exit().remove();
+    ml.enter().append("line").attr("class", "minor").merge(ml)
+      .attr("x1", (d) => x(d)).attr("x2", (d) => x(d)).attr("y1", 0).attr("y2", 3)
+      .style("stroke", "var(--color-divider)");
+    g.select("g.gy").call(d3.axisLeft(y).ticks(6).tickFormat((v) => v.toFixed(1)).tickSizeOuter(0));
+
+    const gl = g.select("g.grid").selectAll("line").data(ticks);
+    gl.enter().append("line").merge(gl)
+      .attr("x1", (d) => x(d)).attr("x2", (d) => x(d)).attr("y1", 0).attr("y2", ih)
+      .style("stroke", "var(--color-text)").style("stroke-opacity", 0.1);
+    gl.exit().remove();
+
+    svg.select("text.xlab").attr("x", M.l).attr("y", H - 6)
+      .style("font", "800 11px var(--font-heading)").style("letter-spacing", "0.1em")
+      .style("fill", "var(--color-neutral-700)").text("AUDIENCE SIZE (LOG) →");
+    svg.select("text.ylab").attr("transform", "translate(12," + (M.t + ih / 2) + ") rotate(-90)")
+      .attr("text-anchor", "middle").style("font", "800 11px var(--font-heading)")
+      .style("letter-spacing", "0.1em").style("fill", "var(--color-neutral-700)").text("SCORE →");
+
+    // sample for DOM sanity, always keeping the gems
+    const CAP = 2600;
+    let plot = rows;
+    if (rows.length > CAP) {
+      const gems = rows.filter(this.isGem), rest = rows.filter((t) => !this.isGem(t));
+      const keep = Math.max(0, CAP - Math.min(gems.length, CAP)), step = rest.length / Math.max(1, keep);
+      const samp = [];
+      for (let i = 0; i < keep; i++) samp.push(rest[Math.floor(i * step)]);
+      plot = gems.slice(0, CAP).concat(samp);
+    }
+    this._plotted = plot.length;
+
+    const tip = this.tipFor(host);
+    const dots = g.select("g.dots").selectAll("rect").data(plot, (d) => d.id);
+    dots.exit().remove();
+    dots.enter().append("rect")
+      .on("mouseenter", (ev, d) => {
+        tip.innerHTML = "<b>" + d.title.replace(/</g, "&lt;") + "</b>" + this.meta(d) +
+          "<i>Underseen index " + (d.gem > 0 ? "+" : "") + d.gem + "</i>";
+        const px = M.l + x(d.members), py = M.t + y(d.score);
+        tip.style.opacity = 1;
+        tip.style.left = Math.min(px + 12, W - 250) + "px";
+        tip.style.top = Math.max(4, py - tip.offsetHeight - 10) + "px";
+      })
+      .on("mouseleave", () => { tip.style.opacity = 0; })
+      .on("click", (ev, d) => this.setState({ selId: d.id }))
+      .merge(dots)
+      .attr("width", (d) => (s.selId === d.id ? 16 : this.isGem(d) ? 9 : 6))
+      .attr("height", (d) => (s.selId === d.id ? 16 : this.isGem(d) ? 9 : 6))
+      .attr("x", (d) => x(d.members) - (s.selId === d.id ? 8 : this.isGem(d) ? 4.5 : 3))
+      .attr("y", (d) => y(d.score) - (s.selId === d.id ? 8 : this.isGem(d) ? 4.5 : 3))
+      .style("cursor", "pointer")
+      .style("fill", (d) => (s.selId === d.id ? "var(--color-text)" : this.isGem(d) ? "var(--color-accent)" : "var(--color-neutral-600)"))
+      .style("fill-opacity", (d) => (s.selId === d.id ? 1 : this.isGem(d) ? 0.95 : 0.45))
+      .style("stroke", (d) => (s.selId === d.id ? "var(--color-text)" : this.isGem(d) ? "var(--color-accent-700)" : "none"))
+      .style("stroke-width", 1);
+    g.select("g.dots").selectAll("rect").sort((a, b) =>
+      (s.selId === a.id ? 2 : this.isGem(a) ? 1 : 0) - (s.selId === b.id ? 2 : this.isGem(b) ? 1 : 0));
+  }
+
+  drawHeat() {
+    const d3 = window.d3, host = this.heatRef.current, s = this.state;
+    if (!host || !s.titles.length) return;
+    const dim = this.heatRows(), eras = this.eras();
+    const W = host.clientWidth || 420;
+    const L = dim.kind === "genre" ? 116 : 92, RH = 30, GAP = 2, TOP = 20;
+    const cw = Math.max(28, (W - L - GAP * eras.length) / eras.length);
+    const H = TOP + dim.keys.length * (RH + GAP);
+
+    const cells = [];
+    let maxRate = 0;
+    dim.keys.forEach((k, r) => eras.forEach((e, c) => {
+      const inCell = s.titles.filter((t) => dim.test(t, k, r) && t.year && t.year >= e.lo && t.year <= e.hi);
+      const gems = inCell.filter(this.isGem).length;
+      const rate = inCell.length >= 5 ? gems / inCell.length : null;
+      if (rate !== null && rate > maxRate) maxRate = rate;
+      cells.push({ k: k, e: e, r: r, c: c, n: inCell.length, gems: gems, rate: rate });
+    }));
+    this._heatMax = maxRate;
+    const col = d3.scaleLinear().domain([0, maxRate || 1])
+      .range(["var(--color-neutral-100)", "var(--color-accent-800)"]);
+    const shade = (t) => t === null ? null
+      : t === 0 ? "var(--color-neutral-100)"
+      : t < 0.34 ? "var(--color-accent-200)"
+      : t < 0.58 ? "var(--color-accent-300)"
+      : t < 0.8 ? "var(--color-accent-500)" : "var(--color-accent-800)";
+
+    let svg = d3.select(host).select("svg.hm");
+    if (svg.empty()) {
+      svg = d3.select(host).append("svg").attr("class", "hm").style("display", "block");
+      const defs = svg.append("defs");
+      const p = defs.append("pattern").attr("id", "hatch").attr("width", 6).attr("height", 6)
+        .attr("patternTransform", "rotate(45)").attr("patternUnits", "userSpaceOnUse");
+      p.append("rect").attr("width", 6).attr("height", 6).style("fill", "var(--color-neutral-100)");
+      p.append("line").attr("x1", 0).attr("y1", 0).attr("x2", 0).attr("y2", 6)
+        .style("stroke", "var(--color-neutral-300)").style("stroke-width", 3);
+      svg.append("g").attr("class", "cols");
+      svg.append("g").attr("class", "rows");
+      svg.append("g").attr("class", "cells");
+    }
+    svg.attr("width", W).attr("height", H);
+
+    const cl = svg.select("g.cols").selectAll("text").data(eras, (d) => d.label);
+    cl.exit().remove();
+    cl.enter().append("text").merge(cl)
+      .attr("x", (d, i) => L + i * (cw + GAP)).attr("y", 12)
+      .style("font", "800 11px var(--font-heading)").style("letter-spacing", "0.06em")
+      .style("fill", "var(--color-neutral-700)").text((d) => d.label.toUpperCase());
+
+    const rl = svg.select("g.rows").selectAll("text").data(dim.keys, (d) => d);
+    rl.exit().remove();
+    rl.enter().append("text").merge(rl)
+      .attr("x", 0).attr("y", (d, i) => TOP + i * (RH + GAP) + RH / 2 + 4)
+      .style("font", "800 12px var(--font-heading)").style("fill", "var(--color-text)")
+      .style("cursor", dim.kind === "genre" ? "pointer" : "default")
+      .on("click", (ev, d) => { if (dim.kind === "genre") this.toggleIn("genres", d); })
+      .text((d) => d);
+
+    const tip = this.tipFor(host);
+    const active = (k, e) => dim.kind === "genre" && s.genres.length === 1 && s.genres[0] === k &&
+      s.yearFrom === Math.max(s.yearFloor, e.lo) && s.yearTo === Math.min(s.yearCeil, e.hi);
+
+    const gsel = svg.select("g.cells").selectAll("g.cell").data(cells, (d) => d.k + "|" + d.e.label);
+    gsel.exit().remove();
+    const ent = gsel.enter().append("g").attr("class", "cell");
+    ent.append("rect");
+    ent.append("text");
+    const all = ent.merge(gsel)
+      .attr("transform", (d) => "translate(" + (L + d.c * (cw + GAP)) + "," + (TOP + d.r * (RH + GAP)) + ")")
+      .style("cursor", (d) => (d.rate === null ? "default" : "pointer"))
+      .on("mouseenter", (ev, d) => {
+        tip.innerHTML = "<b>" + d.k + " · " + d.e.label + "</b>" +
+          (d.n ? d.gems + " underseen of " + d.n + " titles" : "no titles") +
+          (d.rate === null && d.n ? "<i>too few to rate</i>" : "");
+        tip.style.opacity = 1;
+        tip.style.left = Math.min(L + d.c * (cw + GAP) + 10, W - 240) + "px";
+        tip.style.top = TOP + d.r * (RH + GAP) + RH + 6 + "px";
+      })
+      .on("mouseleave", () => { tip.style.opacity = 0; })
+      .on("click", (ev, d) => {
+        if (d.rate === null || dim.kind !== "genre") return;
+        const on = active(d.k, d.e);
+        this.set({
+          genres: on ? [] : [d.k],
+          yearFrom: on ? s.yearFloor : Math.max(s.yearFloor, d.e.lo),
+          yearTo: on ? s.yearCeil : Math.min(s.yearCeil, d.e.hi)
+        });
+      });
+    all.select("rect").attr("width", cw).attr("height", RH)
+      .style("fill", (d) => (d.rate === null ? "url(#hatch)" : shade(maxRate ? d.rate / maxRate : 0)))
+      .style("stroke", (d) => (active(d.k, d.e) ? "var(--color-text)" : "none")).style("stroke-width", 2);
+    all.select("text").attr("x", 6).attr("y", RH / 2 + 4)
+      .style("font", "800 11px var(--font-heading)")
+      .style("fill", (d) => (d.rate !== null && maxRate && d.rate / maxRate >= 0.8 ? "var(--color-neutral-100)" : "var(--color-text)"))
+      .text((d) => (d.rate === null ? "" : Math.round(d.rate * 100) + "%"));
+  }
+
+  // ---------- values ----------
+  renderVals() {
+    const s = this.state;
+    const base = {
+      scatterRef: this.scatterRef, heatRef: this.heatRef, onFile: this.onFile,
+      sourceLabel: s.source, errorMsg: s.error,
+      imgFail: (e) => { e.currentTarget.style.visibility = "hidden"; }
+    };
+    if (!s.titles.length) {
+      return Object.assign(base, {
+        mappingNote: "", genreOpts: [], formatOpts: [], gems: [], noGems: false, noGenres: false,
+        shownCount: "0", gemCount: "0", plotNote: "", rankNote: "", heatNote: "", heatMaxLabel: "",
+        eraLabel: "", minScoreLabel: "", maxMembersLabel: "", scoreCeil: 10, scoreStep: 0.1,
+        yearFloor: 1960, yearCeil: 2026, yearFrom: 1960, yearTo: 2026, minScore: 0,
+        maxMembersLog: 7, memFloorLog: 2, memCeilLog: 7, sel: null,
+        hasCovers: false, rankCols: "26px minmax(0, 1fr) 58px",
+        setYearFrom: () => {}, setYearTo: () => {}, setMinScore: () => {}, setMaxMembers: () => {}, reset: () => {}, closeSel: () => {}
+      });
+    }
+
+    const rows = this.filtered();
+    const gCount = {};
+    for (const t of s.titles) for (const g of t.genres) gCount[g] = (gCount[g] || 0) + 1;
+    const gNames = Object.keys(gCount).sort((a, b) => gCount[b] - gCount[a]).slice(0, 20);
+    const chip = (on) => on
+      ? { bg: "var(--color-accent)", fg: "var(--color-bg)", border: "var(--color-accent)" }
+      : { bg: "transparent", fg: "var(--color-text)", border: "var(--color-divider)" };
+    const genreOpts = gNames.map((n) => Object.assign(
+      { name: n, tip: gCount[n] + " titles", toggle: () => this.toggleIn("genres", n) },
+      chip(s.genres.indexOf(n) >= 0)));
+    const fNames = Array.from(new Set(s.titles.map((t) => t.format))).filter((f) => f !== "Other").slice(0, 8);
+    const formatOpts = fNames.map((n) => Object.assign(
+      { name: n, toggle: () => this.toggleIn("formats", n) }, chip(s.formats.indexOf(n) >= 0)));
+
+    const gsel = s.genres;
+    const scored = rows.filter((t) => t.gem > 0 && t.sp >= 60).map((t) => {
+      const match = gsel.length ? t.genres.filter((g) => gsel.indexOf(g) >= 0).length / gsel.length : null;
+      return { t: t, match: match, rank: t.gem * (match === null ? 1 : 0.45 + 0.55 * Math.min(1, match)) };
+    }).sort((a, b) => b.rank - a.rank).slice(0, 12);
+    const gems = scored.map((x, i) => ({
+      rank: String(i + 1).padStart(2, "0"), title: x.t.title,
+      meta: this.meta(x.t) + (x.match !== null ? " · " + Math.round(x.match * 100) + "% taste match" : ""),
+      gemScore: (x.t.gem > 0 ? "+" : "") + x.t.gem,
+      barW: Math.max(3, Math.min(100, x.t.gem)).toFixed(0),
+      image: x.t.image || "",
+      bg: s.selId === x.t.id ? "var(--color-accent-200)" : "transparent",
+      click: () => this.setState({ selId: x.t.id })
+    }));
+
+    const st = s.selId && s.titles.find((t) => t.id === s.selId);
+    const sel = st ? {
+      badge: this.isGem(st) ? "Underseen pick" : st.gem > 0 ? "Slightly under-watched" : "Widely seen",
+      title: st.title,
+      meta: [st.format !== "Other" ? st.format : null, st.year || "year unknown",
+        st.episodes ? st.episodes + " eps" : null, st.studio].filter(Boolean).join(" · "),
+      image: st.image || null,
+      genres: st.genres.length ? st.genres : ["No genre data in this file"],
+      stats: [
+        { value: st.score.toFixed(2), label: "Score", color: "var(--color-text)" },
+        { value: this.fmtN(st.members), label: "Votes", color: "var(--color-text)" },
+        { value: this.ord(st.sp), label: "Score percentile", color: "var(--color-text)" },
+        { value: this.ord(st.mp), label: "Audience percentile", color: "var(--color-text)" },
+        { value: (st.gem > 0 ? "+" : "") + st.gem, label: "Underseen index", color: st.gem > 0 ? "var(--color-accent-700)" : "var(--color-neutral-700)" },
+        { value: gsel.length ? Math.round((st.genres.filter((g) => gsel.indexOf(g) >= 0).length / gsel.length) * 100) + "%" : "—", label: "Taste match", color: "var(--color-text)" }
+      ],
+      reading: "Rated better than " + Math.round(st.sp) + "% of the dataset while reaching a smaller audience than " + Math.round(100 - st.mp) + "% of it.",
+      synopsis: st.synopsis || null
+    } : null;
+
+    const heatKind = gNames.length ? "genre" : "audience";
+    return Object.assign(base, {
+      mappingNote: s.mapping
+        ? "Mapped: " + Object.keys(s.mapping).map((k) => k + " → " + s.mapping[k]).join(", ") +
+          (s.skipped ? " · " + s.skipped.toLocaleString() + " rows skipped" : "")
+        : "Use the per-anime table (score + members/scored_by + genres + type + year); an episode-level file is aggregated to one row per series. Read in your browser — nothing is uploaded.",
+      genreOpts: genreOpts, formatOpts: formatOpts, noGenres: gNames.length === 0,
+      gems: gems, noGems: gems.length === 0,
+      hasCovers: gems.some((g) => g.image),
+      rankCols: gems.some((g) => g.image) ? "38px 26px minmax(0, 1fr) 58px" : "26px minmax(0, 1fr) 58px",
+      shownCount: rows.length.toLocaleString(),
+      gemCount: rows.filter(this.isGem).length.toLocaleString(),
+      plotNote: (this._plotted && this._plotted < rows.length)
+        ? "showing " + this._plotted.toLocaleString() + " of " + rows.length.toLocaleString() + " marks"
+        : rows.length.toLocaleString() + " titles plotted",
+      heatNote: heatKind === "genre"
+        ? "Share of titles in each genre and era that land in the underseen quadrant. Click a cell to filter everything to that genre and decade."
+        : "This file has no genre column, so rows are audience bands: the share of titles in each band and era that land in the underseen quadrant.",
+      heatMaxLabel: Math.round((this._heatMax || 0) * 100) + "%",
+      rankNote: gsel.length
+        ? "Ranked by underseen index weighted by how well each title matches " + gsel.join(" / ") + "."
+        : "Ranked by underseen index. Pick genres on the left to re-rank on taste match.",
+      eraLabel: s.yearFrom + "–" + s.yearTo,
+      minScoreLabel: s.minScore > 0 ? s.minScore.toFixed(1) + "+" : "any",
+      maxMembersLabel: "≤ " + this.fmtN(Math.round(Math.pow(10, s.maxMembersLog))),
+      scoreCeil: s.scoreMax, scoreStep: s.scoreMax > 5 ? 0.1 : 0.05,
+      yearFloor: s.yearFloor, yearCeil: s.yearCeil, yearFrom: s.yearFrom, yearTo: s.yearTo,
+      minScore: s.minScore, maxMembersLog: s.maxMembersLog,
+      memFloorLog: Math.log10(Math.max(10, s.memMin)).toFixed(2),
+      memCeilLog: (Math.log10(s.memMax) + 0.05).toFixed(2),
+      sel: sel, closeSel: () => this.setState({ selId: null }),
+      setYearFrom: (e) => this.set({ yearFrom: Math.min(+e.target.value, s.yearTo) }),
+      setYearTo: (e) => this.set({ yearTo: Math.max(+e.target.value, s.yearFrom) }),
+      setMinScore: (e) => this.set({ minScore: +e.target.value }),
+      setMaxMembers: (e) => this.set({ maxMembersLog: +e.target.value }),
+      reset: () => this.set({ genres: [], formats: [], minScore: 0,
+        maxMembersLog: Math.log10(s.memMax) + 0.05, yearFrom: s.yearFloor, yearTo: s.yearCeil })
+    });
+  }
+}
+</script>
+</body>
+</html>

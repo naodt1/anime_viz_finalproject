@@ -1,237 +1,145 @@
 import * as d3 from 'd3';
-import { AppState } from './state.js';
-import { showTip, hideTip } from './tooltip.js';
-import { makeResponsive } from './responsive.js';
+import { State, isGem, filteredTitles, setState } from './state.js';
+import { tipFor, escapeHtml } from './tip.js';
+import { fmtN, metaLine } from './format.js';
 
-const margin = { top: 10, right: 24, bottom: 40, left: 46 };
-const width = 1120;
-const height = 340;
-const innerW = width - margin.left - margin.right;
-const innerH = height - margin.top - margin.bottom;
+const M = { t: 12, r: 14, b: 44, l: 46 };
+const CAP = 2600; // above this many filtered rows, sample for DOM sanity
 
-const DOT_R = 2.6;
-const DOT_R_SELECTED = 3.4;
-const COLOR_DEFAULT = '#0e9b6c';
-const COLOR_SELECTED = '#e0484b';
-const HOVER_RADIUS = 8;
+let host;
+let plottedCount = 0;
 
-let scatterG, brushLayer, xAxisG, yAxisG, brushG, brush;
-let canvas, ctx;
-let quadtree;
-let onBrushChange = () => {};
+export function initScatter(el) {
+  host = el;
+}
 
-// The gem-zone brush's current bounds, kept in DATA space (score/members)
-// rather than pixel space. Filter changes (genre chips, the timeline)
-// rescale the axes, so a pixel-space selection would either mean something
-// different after the rescale or have to be discarded; keeping it in data
-// space lets the same "score >= X, members <= Y" selection carry over and
-// just get re-projected onto the new scales, instead of vanishing every
-// time a filter elsewhere changes.
-let brushDomain = null;
+export function scatterPlottedCount() {
+  return plottedCount;
+}
 
-// The dot cloud (up to ~10k points) is drawn on a <canvas> instead of as
-// SVG circles — one bulk redraw per brush tick instead of thousands of DOM
-// nodes, which keeps brushing/filtering smooth at this data size. Axes,
-// the brush overlay, and labels stay in SVG since there are few of them
-// and SVG makes hit-testing/interaction (the brush drag, hover) simple.
-export function initScatter(onBrushChangeCb) {
-  onBrushChange = onBrushChangeCb;
+export function drawScatter() {
+  const s = State;
+  if (!host || !s.titles.length) return;
 
-  const container = d3.select(makeResponsive('#scatter', width, height));
+  const W = host.clientWidth || 720;
+  const H = host.clientHeight || 470;
+  const iw = Math.max(80, W - M.l - M.r);
+  const ih = Math.max(80, H - M.t - M.b);
+  const rows = filteredTitles();
 
-  const dpr = window.devicePixelRatio || 1;
-  canvas = container
-    .append('canvas')
-    .style('left', margin.left + 'px')
-    .style('top', margin.top + 'px')
-    .style('width', innerW + 'px')
-    .style('height', innerH + 'px')
-    .attr('width', innerW * dpr)
-    .attr('height', innerH * dpr)
-    .node();
-  ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr);
+  const x = d3.scaleLog().domain([Math.max(10, s.memMin), Math.max(100, s.memMax)]).range([0, iw]).clamp(true);
+  const y = d3.scaleLinear().domain([s.yLo, s.yHi]).range([ih, 0]).clamp(true);
 
-  const svg = container.append('svg').attr('width', width).attr('height', height);
-  scatterG = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
-  brushLayer = scatterG.append('g').attr('class', 'brush-layer');
-  xAxisG = scatterG.append('g').attr('class', 'x-axis');
-  yAxisG = scatterG.append('g').attr('class', 'y-axis');
+  let svg = d3.select(host).select('svg.sc');
+  if (svg.empty()) {
+    svg = d3.select(host).append('svg').attr('class', 'sc')
+      .style('display', 'block')
+      .style('border', '2px solid var(--color-divider)')
+      .style('background', 'var(--color-neutral-100)');
+    const g = svg.append('g').attr('class', 'in');
+    g.append('rect').attr('class', 'zone');
+    g.append('text').attr('class', 'zlab');
+    g.append('g').attr('class', 'ax gx');
+    g.append('g').attr('class', 'ax gy');
+    g.append('g').attr('class', 'grid');
+    g.append('g').attr('class', 'dots');
+    svg.append('text').attr('class', 'xlab');
+    svg.append('text').attr('class', 'ylab');
+  }
+  if (+svg.attr('width') !== W) svg.attr('width', W);
+  if (+svg.attr('height') !== H) svg.attr('height', H);
+  const g = svg.select('g.in').attr('transform', `translate(${M.l},${M.t})`);
 
-  scatterG
-    .append('text')
-    .attr('class', 'axis-label')
-    .attr('x', innerW / 2)
-    .attr('y', height - margin.top - 8)
+  // underseen quadrant field, inner edges only
+  const zx = x(Math.max(10, s.memThresh));
+  const zy = y(s.scoreThresh);
+  g.select('rect.zone')
+    .attr('x', 0).attr('y', 0).attr('width', zx).attr('height', zy)
+    .style('fill', 'var(--color-accent)').style('fill-opacity', 0.1)
+    .style('stroke', 'var(--color-accent)').style('stroke-width', 2)
+    .style('stroke-dasharray', `0,${zx},${zy},9999`);
+  g.select('text.zlab')
+    .attr('x', 8).attr('y', zy - 8)
+    .style('font', '800 11px var(--font-heading)').style('letter-spacing', '0.1em')
+    .style('fill', 'var(--color-accent-700)').text('UNDERSEEN QUADRANT');
+
+  // decade ticks only: scaleLog().ticks(n) ignores n and returns every minor tick
+  const dom = x.domain();
+  const p0 = Math.ceil(Math.log10(dom[0]));
+  const p1 = Math.floor(Math.log10(dom[1]));
+  let ticks = d3.range(p0, p1 + 1).map((p) => Math.pow(10, p));
+  if (ticks.length < 2) ticks = [dom[0], dom[1]];
+  const minor = [];
+  for (let p = p0 - 1; p <= p1; p++) {
+    for (let m = 2; m <= 9; m++) {
+      const v = m * Math.pow(10, p);
+      if (v > dom[0] && v < dom[1]) minor.push(v);
+    }
+  }
+  g.select('g.gx').attr('transform', `translate(0,${ih})`)
+    .call(d3.axisBottom(x).tickValues(ticks).tickFormat((v) => fmtN(v)).tickSizeOuter(0));
+  const ml = g.select('g.gx').selectAll('line.minor').data(minor);
+  ml.exit().remove();
+  ml.enter().append('line').attr('class', 'minor').merge(ml)
+    .attr('x1', (d) => x(d)).attr('x2', (d) => x(d)).attr('y1', 0).attr('y2', 3)
+    .style('stroke', 'var(--color-divider)');
+  g.select('g.gy').call(d3.axisLeft(y).ticks(6).tickFormat((v) => v.toFixed(1)).tickSizeOuter(0));
+
+  const gl = g.select('g.grid').selectAll('line').data(ticks);
+  gl.enter().append('line').merge(gl)
+    .attr('x1', (d) => x(d)).attr('x2', (d) => x(d)).attr('y1', 0).attr('y2', ih)
+    .style('stroke', 'var(--color-text)').style('stroke-opacity', 0.1);
+  gl.exit().remove();
+
+  svg.select('text.xlab').attr('x', M.l).attr('y', H - 6)
+    .style('font', '800 11px var(--font-heading)').style('letter-spacing', '0.1em')
+    .style('fill', 'var(--color-neutral-700)').text('AUDIENCE SIZE (LOG) →');
+  svg.select('text.ylab').attr('transform', `translate(12,${M.t + ih / 2}) rotate(-90)`)
     .attr('text-anchor', 'middle')
-    .text('Members (log scale) →');
+    .style('font', '800 11px var(--font-heading)').style('letter-spacing', '0.1em')
+    .style('fill', 'var(--color-neutral-700)').text('SCORE →');
 
-  scatterG
-    .append('text')
-    .attr('class', 'axis-label')
-    .attr('transform', 'rotate(-90)')
-    .attr('x', -height / 2)
-    .attr('y', 14)
-    .attr('text-anchor', 'middle')
-    .text('Score →');
-}
-
-export function drawScatter(resetBrush) {
-  const data = AppState.filteredData;
-
-  const memberExtent = d3.extent(data, d => d.members);
-  const scoreExtent = d3.extent(data, d => d.score);
-
-  AppState.scatterX = d3
-    .scaleLog()
-    .domain([Math.max(1, memberExtent[0] * 0.8), memberExtent[1] * 1.1])
-    .range([0, innerW]);
-  AppState.scatterY = d3
-    .scaleLinear()
-    .domain([scoreExtent[0] - 0.3, scoreExtent[1] + 0.2])
-    .range([innerH, 0]);
-
-  xAxisG
-    .attr('transform', `translate(0,${innerH})`)
-    .call(d3.axisBottom(AppState.scatterX).ticks(5, '~s').tickSizeOuter(0))
-    .call(g => g.selectAll('.domain,.tick line').attr('stroke', '#dbe1e7'));
-  yAxisG
-    .call(d3.axisLeft(AppState.scatterY).ticks(6).tickSizeOuter(0))
-    .call(g => g.selectAll('.domain,.tick line').attr('stroke', '#dbe1e7'));
-
-  quadtree = d3
-    .quadtree()
-    .x(d => AppState.scatterX(d.members))
-    .y(d => AppState.scatterY(d.score))
-    .addAll(data);
-
-  d3.select('#scatter-stat').text(`${data.length.toLocaleString()} titles`);
-
-  brush = d3.brush().extent([[0, 0], [innerW, innerH]]).on('brush end', brushed);
-
-  brushLayer.selectAll('*').remove();
-  brushG = brushLayer.append('g').attr('class', 'brush').call(brush);
-  // Once a selection exists, d3-brush's .selection rect and resize handles
-  // sit on top of .overlay within the brushed area, intercepting hover
-  // before it gets there — wire every one of the brush's rects, not just
-  // the overlay, so hovering a dot still works inside the gem zone.
-  brushG
-    .selectAll('rect')
-    .on('mousemove.tooltip', handleHover)
-    .on('mouseleave.tooltip', hideTip);
-
-  if (resetBrush) {
-    // Top quartile score, bottom quartile members — both quartiles so
-    // "well-reviewed" and "obscure" are held to the same strictness,
-    // rather than pairing a quartile with a looser median split.
-    const scoreQ = d3.quantile(data.map(d => d.score).sort(d3.ascending), 0.75);
-    const memberQ = d3.quantile(data.map(d => d.members).sort(d3.ascending), 0.25);
-    brushDomain = { x0: memberExtent[0], x1: memberQ, y0: scoreQ, y1: scoreExtent[1] + 0.2 };
+  // sample above the cap, always keeping every gem
+  let plot = rows;
+  if (rows.length > CAP) {
+    const gems = rows.filter(isGem);
+    const rest = rows.filter((t) => !isGem(t));
+    const keep = Math.max(0, CAP - Math.min(gems.length, CAP));
+    const step = rest.length / Math.max(1, keep);
+    const samp = [];
+    for (let i = 0; i < keep; i++) samp.push(rest[Math.floor(i * step)]);
+    plot = gems.slice(0, CAP).concat(samp);
   }
+  plottedCount = plot.length;
 
-  applyBrushDomain();
-}
+  const tip = tipFor(host);
+  const size = (d) => (s.selId === d.id ? 16 : isGem(d) ? 9 : 6);
+  const dots = g.select('g.dots').selectAll('rect').data(plot, (d) => d.id);
+  dots.exit().remove();
+  dots.enter().append('rect')
+    .on('mouseenter', (ev, d) => {
+      tip.innerHTML = `<b>${escapeHtml(d.title)}</b>${escapeHtml(metaLine(d))}`
+        + `<i>Underseen index ${d.gem > 0 ? '+' : ''}${d.gem}</i>`;
+      const px = M.l + x(d.members);
+      const py = M.t + y(d.score);
+      tip.style.opacity = 1;
+      tip.style.left = Math.min(px + 12, W - 250) + 'px';
+      tip.style.top = Math.max(4, py - tip.offsetHeight - 10) + 'px';
+    })
+    .on('mouseleave', () => { tip.style.opacity = 0; })
+    .on('click', (ev, d) => setState({ selId: d.id }))
+    .merge(dots)
+    .attr('width', size).attr('height', size)
+    .attr('x', (d) => x(d.members) - size(d) / 2)
+    .attr('y', (d) => y(d.score) - size(d) / 2)
+    .style('cursor', 'pointer')
+    .style('fill', (d) => (s.selId === d.id ? 'var(--color-text)' : isGem(d) ? 'var(--color-accent)' : 'var(--color-neutral-600)'))
+    .style('fill-opacity', (d) => (s.selId === d.id ? 1 : isGem(d) ? 0.95 : 0.45))
+    .style('stroke', (d) => (s.selId === d.id ? 'var(--color-text)' : isGem(d) ? 'var(--color-accent-700)' : 'none'))
+    .style('stroke-width', 1);
 
-// Surfaces the gem zone's actual score/member thresholds as text — the
-// zone is defined by percentiles of whatever's currently filtered, so the
-// real numbers shift silently as filters change; this keeps that visible
-// instead of leaving it implicit in where the brush happens to sit.
-function updateZoneStat() {
-  const el = d3.select('#zone-stat');
-  if (!brushDomain) {
-    el.text('No gem zone selected — drag a box above to define one.');
-    return;
-  }
-  el.text(`Current gem zone: score ≥ ${brushDomain.y0.toFixed(2)} · members ≤ ${d3.format(',')(Math.round(brushDomain.x1))}`);
-}
-
-// Re-projects the current data-space brushDomain onto the (possibly just
-// rescaled) axes and moves the visual brush to match — or clears it if
-// there's no active selection. d3-brush clamps out-of-range coordinates to
-// its extent on its own, so a domain that no longer fully fits the new
-// scale just touches the edge instead of erroring.
-function applyBrushDomain() {
-  if (!brushDomain) {
-    brushed({ selection: null });
-    return;
-  }
-  const x0 = AppState.scatterX(brushDomain.x0);
-  const x1 = AppState.scatterX(brushDomain.x1);
-  const y0 = AppState.scatterY(brushDomain.y1);
-  const y1 = AppState.scatterY(brushDomain.y0);
-  brushG.call(brush.move, [[x0, y0], [x1, y1]]);
-}
-
-function handleHover(evt) {
-  const [mx, my] = d3.pointer(evt, scatterG.node());
-  const d = quadtree.find(mx, my, HOVER_RADIUS);
-  if (!d) {
-    hideTip();
-    return;
-  }
-  showTip(
-    `<strong>${d.title}</strong><span class="meta">${d.type} · ${d.year} · ${d.primaryGenre}</span>` +
-      `<span class="meta">Score ${d.score} · ${d3.format(',')(d.members)} members</span>`,
-    evt
-  );
-}
-
-function renderDots(data, selectedIds, sel) {
-  ctx.clearRect(0, 0, innerW, innerH);
-
-  const rest = [];
-  const selected = [];
-  data.forEach(d => (selectedIds.has(d.id) ? selected : rest).push(d));
-
-  ctx.globalAlpha = sel ? 0.18 : 0.55;
-  ctx.fillStyle = COLOR_DEFAULT;
-  ctx.beginPath();
-  rest.forEach(d => {
-    const cx = AppState.scatterX(d.members);
-    const cy = AppState.scatterY(d.score);
-    ctx.moveTo(cx + DOT_R, cy);
-    ctx.arc(cx, cy, DOT_R, 0, Math.PI * 2);
-  });
-  ctx.fill();
-
-  ctx.globalAlpha = sel ? 0.9 : 0.55;
-  ctx.fillStyle = COLOR_SELECTED;
-  ctx.beginPath();
-  selected.forEach(d => {
-    const cx = AppState.scatterX(d.members);
-    const cy = AppState.scatterY(d.score);
-    ctx.moveTo(cx + DOT_R_SELECTED, cy);
-    ctx.arc(cx, cy, DOT_R_SELECTED, 0, Math.PI * 2);
-  });
-  ctx.fill();
-
-  ctx.globalAlpha = 1;
-}
-
-function brushed(evt) {
-  const sel = evt.selection;
-  const selectedIds = new Set();
-
-  if (sel) {
-    const [[x0, y0], [x1, y1]] = sel;
-    brushDomain = {
-      x0: AppState.scatterX.invert(x0),
-      x1: AppState.scatterX.invert(x1),
-      y0: AppState.scatterY.invert(y1),
-      y1: AppState.scatterY.invert(y0)
-    };
-    AppState.filteredData.forEach(d => {
-      const px = AppState.scatterX(d.members);
-      const py = AppState.scatterY(d.score);
-      if (px >= x0 && px <= x1 && py >= y0 && py <= y1) selectedIds.add(d.id);
-    });
-  } else {
-    brushDomain = null;
-  }
-
-  updateZoneStat();
-  renderDots(AppState.filteredData, selectedIds, sel);
-
-  AppState.brushSelectionData = AppState.filteredData.filter(d => selectedIds.has(d.id));
-  onBrushChange();
+  // paint order: selected above gems above the rest
+  g.select('g.dots').selectAll('rect').sort((a, b) => (
+    (s.selId === a.id ? 2 : isGem(a) ? 1 : 0) - (s.selId === b.id ? 2 : isGem(b) ? 1 : 0)
+  ));
 }

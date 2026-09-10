@@ -1,142 +1,142 @@
 import * as d3 from 'd3';
-import { AppState } from './state.js';
-import { showTip, hideTip } from './tooltip.js';
-import { makeResponsive } from './responsive.js';
+import { State, isGem, setFilter } from './state.js';
+import { tipFor } from './tip.js';
 
-const margin = { top: 26, right: 16, bottom: 10, left: 110 };
-const width = 1120;
-const ROW_H = 20;
-const LOW_N = 10;
-const RATE_DOMAIN_MAX = 0.3;
+const RH = 30;
+const GAP = 2;
+const TOP = 20;
+const LOW_N = 5;
 
-// Sequential single-hue ramp (pale to the app's teal accent) — cell shade
-// encodes what fraction of a genre x format combo falls in the current
-// gem-zone brush, so this reads directly against the same "In selection"
-// concept the sankey and scatter already use.
-const color = d3.scaleLinear().domain([0, RATE_DOMAIN_MAX]).range(['#eef7f2', '#0a6e4d']).clamp(true);
+let host;
+let heatMax = 0;
 
-let g, innerW, colW, genres;
-
-export function initHeatmap() {
-  genres = AppState.TOP_GENRES;
-  const height = margin.top + genres.length * ROW_H + margin.bottom + 34;
-
-  const svg = d3.select(makeResponsive('#heatmap', width, height)).append('svg').attr('width', width).attr('height', height);
-  innerW = width - margin.left - margin.right;
-  colW = innerW / AppState.FORMATS.length;
-  g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
-
-  g.append('g')
-    .attr('class', 'heatmap-col-headers')
-    .selectAll('text')
-    .data(AppState.FORMATS)
-    .enter()
-    .append('text')
-    .attr('class', 'sankey-col-label')
-    .attr('x', (d, i) => i * colW + colW / 2)
-    .attr('y', -10)
-    .attr('text-anchor', 'middle')
-    .text(d => d);
-
-  g.append('g')
-    .attr('class', 'heatmap-row-labels')
-    .selectAll('text')
-    .data(genres)
-    .enter()
-    .append('text')
-    .attr('class', 'axis-label')
-    .attr('x', -10)
-    .attr('y', (d, i) => i * ROW_H + ROW_H / 2 + 4)
-    .attr('text-anchor', 'end')
-    .text(d => d);
-
-  g.append('g').attr('class', 'heatmap-cells');
-
-  drawLegend(svg, height);
+export function initHeatmap(el) {
+  host = el;
 }
 
-function drawLegend(svg, height) {
-  const legendW = 140;
-  const legendX = width - margin.right - legendW;
-  const legendY = height - 22;
-
-  const gradId = 'heatmap-gradient';
-  const defs = svg.append('defs');
-  const gradient = defs.append('linearGradient').attr('id', gradId);
-  gradient.append('stop').attr('offset', '0%').attr('stop-color', color(0));
-  gradient.append('stop').attr('offset', '100%').attr('stop-color', color(RATE_DOMAIN_MAX));
-
-  const legend = svg.append('g').attr('transform', `translate(${legendX},${legendY})`);
-  legend.append('rect').attr('width', legendW).attr('height', 8).attr('fill', `url(#${gradId})`).attr('rx', 2);
-  legend.append('text').attr('class', 'axis-label').attr('x', 0).attr('y', 20).attr('text-anchor', 'start').text('0%');
-  legend
-    .append('text')
-    .attr('class', 'axis-label')
-    .attr('x', legendW)
-    .attr('y', 20)
-    .attr('text-anchor', 'end')
-    .text(`${Math.round(RATE_DOMAIN_MAX * 100)}%+ gem rate`);
+export function heatMaxRate() {
+  return heatMax;
 }
+
+function eras() {
+  const s = State;
+  return [
+    { label: 'pre-90', lo: 0, hi: 1989 },
+    { label: '1990s', lo: 1990, hi: 1999 },
+    { label: '2000s', lo: 2000, hi: 2009 },
+    { label: '2010s', lo: 2010, hi: 2019 },
+    { label: '2020s', lo: 2020, hi: 2100 },
+  ].filter((e) => e.hi >= (s.yearFloor || 0) && e.lo <= (s.yearCeil || 2100));
+}
+
+// Ten most frequent genres across the full dataset.
+function topGenres() {
+  const c = {};
+  for (const t of State.titles) for (const g of t.genres) c[g] = (c[g] || 0) + 1;
+  return Object.keys(c).sort((a, b) => c[b] - c[a]).slice(0, 10);
+}
+
+const shade = (ratio) => (
+  ratio === null ? 'url(#hatch)'
+    : ratio === 0 ? 'var(--color-neutral-100)'
+      : ratio < 0.34 ? 'var(--color-accent-200)'
+        : ratio < 0.58 ? 'var(--color-accent-300)'
+          : ratio < 0.80 ? 'var(--color-accent-500)'
+            : 'var(--color-accent-800)'
+);
 
 export function drawHeatmap() {
-  const data = AppState.filteredData;
-  const selectedIds = new Set(AppState.brushSelectionData.map(d => d.id));
+  const s = State;
+  if (!host || !s.titles.length) return;
 
+  const genres = topGenres();
+  const es = eras();
+  const W = host.clientWidth || 420;
+  const L = 116;
+  const cw = Math.max(28, (W - L - GAP * es.length) / es.length);
+  const H = TOP + genres.length * (RH + GAP);
+
+  // cell rate is computed over the FULL dataset, not the filtered subset
   const cells = [];
-  genres.forEach((genre, ri) => {
-    AppState.FORMATS.forEach((format, ci) => {
-      const subset = data.filter(d => d.primaryGenre === genre && d.type === format);
-      const gem = subset.filter(d => selectedIds.has(d.id)).length;
-      cells.push({
-        genre,
-        format,
-        ri,
-        ci,
-        n: subset.length,
-        rate: subset.length ? gem / subset.length : null
+  heatMax = 0;
+  genres.forEach((k, r) => es.forEach((e, c) => {
+    const inCell = s.titles.filter((t) => t.genres.indexOf(k) >= 0 && t.year && t.year >= e.lo && t.year <= e.hi);
+    const gems = inCell.filter(isGem).length;
+    const rate = inCell.length >= LOW_N ? gems / inCell.length : null;
+    if (rate !== null && rate > heatMax) heatMax = rate;
+    cells.push({ k, e, r, c, n: inCell.length, gems, rate });
+  }));
+
+  let svg = d3.select(host).select('svg.hm');
+  if (svg.empty()) {
+    svg = d3.select(host).append('svg').attr('class', 'hm').style('display', 'block');
+    const defs = svg.append('defs');
+    const p = defs.append('pattern').attr('id', 'hatch').attr('width', 6).attr('height', 6)
+      .attr('patternTransform', 'rotate(45)').attr('patternUnits', 'userSpaceOnUse');
+    p.append('rect').attr('width', 6).attr('height', 6).style('fill', 'var(--color-neutral-100)');
+    p.append('line').attr('x1', 0).attr('y1', 0).attr('x2', 0).attr('y2', 6)
+      .style('stroke', 'var(--color-neutral-300)').style('stroke-width', 3);
+    svg.append('g').attr('class', 'cols');
+    svg.append('g').attr('class', 'rows');
+    svg.append('g').attr('class', 'cells');
+  }
+  svg.attr('width', W).attr('height', H);
+
+  const cl = svg.select('g.cols').selectAll('text').data(es, (d) => d.label);
+  cl.exit().remove();
+  cl.enter().append('text').merge(cl)
+    .attr('x', (d, i) => L + i * (cw + GAP)).attr('y', 12)
+    .attr('class', 'sankey-col-label')
+    .text((d) => d.label.toUpperCase());
+
+  const rl = svg.select('g.rows').selectAll('text').data(genres, (d) => d);
+  rl.exit().remove();
+  rl.enter().append('text').merge(rl)
+    .attr('x', 0).attr('y', (d, i) => TOP + i * (RH + GAP) + RH / 2 + 4)
+    .style('font', '800 12px var(--font-heading)').style('fill', 'var(--color-text)')
+    .style('cursor', 'pointer')
+    .on('click', (ev, d) => {
+      const cur = s.genres;
+      setFilter({ genres: cur.indexOf(d) >= 0 ? cur.filter((x) => x !== d) : cur.concat([d]) });
+    })
+    .text((d) => d);
+
+  const tip = tipFor(host);
+  const isActive = (k, e) => s.genres.length === 1 && s.genres[0] === k
+    && s.yearFrom === Math.max(s.yearFloor, e.lo) && s.yearTo === Math.min(s.yearCeil, e.hi);
+
+  const gsel = svg.select('g.cells').selectAll('g.cell').data(cells, (d) => d.k + '|' + d.e.label);
+  gsel.exit().remove();
+  const ent = gsel.enter().append('g').attr('class', 'cell');
+  ent.append('rect');
+  ent.append('text');
+  const all = ent.merge(gsel)
+    .attr('transform', (d) => `translate(${L + d.c * (cw + GAP)},${TOP + d.r * (RH + GAP)})`)
+    .style('cursor', (d) => (d.rate === null ? 'default' : 'pointer'))
+    .on('mouseenter', (ev, d) => {
+      tip.innerHTML = `<b>${d.k} · ${d.e.label}</b>`
+        + (d.n ? `${d.gems} underseen of ${d.n} titles` : 'no titles')
+        + (d.rate === null && d.n ? '<i>too few to rate</i>' : '');
+      tip.style.opacity = 1;
+      tip.style.left = Math.min(L + d.c * (cw + GAP) + 10, W - 240) + 'px';
+      tip.style.top = (TOP + d.r * (RH + GAP) + RH + 6) + 'px';
+    })
+    .on('mouseleave', () => { tip.style.opacity = 0; })
+    .on('click', (ev, d) => {
+      if (d.rate === null) return;
+      const on = isActive(d.k, d.e);
+      setFilter({
+        genres: on ? [] : [d.k],
+        yearFrom: on ? s.yearFloor : Math.max(s.yearFloor, d.e.lo),
+        yearTo: on ? s.yearCeil : Math.min(s.yearCeil, d.e.hi),
       });
     });
-  });
-
-  const cellsG = g.select('.heatmap-cells');
-  const key = d => d.genre + '::' + d.format;
-
-  const rects = cellsG.selectAll('rect').data(cells, key);
-  rects
-    .enter()
-    .append('rect')
-    .attr('rx', 3)
-    .attr('stroke', '#dbe1e7')
-    .merge(rects)
-    .attr('x', d => d.ci * colW + 1)
-    .attr('y', d => d.ri * ROW_H + 1)
-    .attr('width', colW - 2)
-    .attr('height', ROW_H - 2)
-    .attr('fill', d => (d.n === 0 ? '#f1f3f5' : color(d.rate)))
-    .attr('opacity', d => (d.n > 0 && d.n < LOW_N ? 0.5 : 1))
-    .on('mousemove', (evt, d) =>
-      showTip(
-        `<strong>${d.genre} · ${d.format}</strong><span class="meta">${d.n === 0 ? 'no titles' : Math.round(d.rate * 1000) / 10 + '% in gem zone'}</span>` +
-          `<span class="meta">${d.n.toLocaleString()} titles</span>`,
-        evt
-      )
-    )
-    .on('mouseleave', hideTip);
-
-  const labels = cellsG.selectAll('text').data(
-    cells.filter(d => d.n > 0),
-    key
-  );
-  labels.exit().remove();
-  labels
-    .enter()
-    .append('text')
-    .style('pointer-events', 'none')
-    .merge(labels)
-    .attr('x', d => d.ci * colW + colW / 2)
-    .attr('y', d => d.ri * ROW_H + ROW_H / 2 + 4)
-    .attr('text-anchor', 'middle')
-    .attr('font-size', 10.5)
-    .attr('fill', d => (d.rate > RATE_DOMAIN_MAX * 0.55 ? '#eef7f2' : '#1a2129'))
-    .text(d => Math.round(d.rate * 100) + '%');
+  all.select('rect').attr('width', cw).attr('height', RH)
+    .style('fill', (d) => (d.rate === null ? 'url(#hatch)' : shade(heatMax ? d.rate / heatMax : 0)))
+    .style('stroke', (d) => (isActive(d.k, d.e) ? 'var(--color-text)' : 'none'))
+    .style('stroke-width', 2);
+  all.select('text').attr('x', 6).attr('y', RH / 2 + 4)
+    .style('font', '800 11px var(--font-heading)')
+    .style('fill', (d) => (d.rate !== null && heatMax && d.rate / heatMax >= 0.8 ? 'var(--color-neutral-100)' : 'var(--color-text)'))
+    .text((d) => (d.rate === null ? '' : Math.round(d.rate * 100) + '%'));
 }

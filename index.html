@@ -2,98 +2,151 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Hidden Gem Finder — MAL Dataset</title>
+<title>Underseen — anime discovery</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<div class="wrap">
-  <div class="header">
-    <h1>Hidden gem finder</h1>
-    <p>Anime that scores well but hasn't reached a wide audience yet. Drag a box on the scatterplot to define your own "gem zone" — everything below updates to match. Data: MyAnimeList, filtered to titles with 300+ ratings.</p>
-  </div>
+<div class="app">
 
-  <div class="layout">
-    <div class="sidebar">
-      <div class="filter-group">
-        <h3>Genre</h3>
-        <div class="chip-row" id="genre-filter"></div>
-      </div>
-      <div class="filter-group">
-        <h3>Format</h3>
-        <div class="chip-row" id="format-filter"></div>
-      </div>
-      <div class="filter-group">
-        <h3>Episodes</h3>
-        <div class="range-row">
-          <input type="number" id="ep-min" step="1" min="1">
-          <span>to</span>
-          <input type="number" id="ep-max" step="1" min="1">
+  <header class="header">
+    <div class="spine"><span>隠れた名作</span></div>
+    <div class="header-body">
+      <div class="header-lede">
+        <div class="kicker-row">
+          <div class="kicker">Acclaim vs. exposure</div>
+          <div class="speed"></div>
         </div>
+        <h1 class="wordmark">Underseen</h1>
+        <p class="blurb">Popularity rankings conflate widely seen with well liked. Every title here is placed by how well it scored against how many people actually watched it, so the gap becomes visible and filterable by genre, format and era.</p>
       </div>
-      <button class="reset-btn" id="reset-filters">Reset filters</button>
-    </div>
-
-    <div class="main">
-      <div class="panel">
-        <div class="panel-title">
-          <h2>Release era</h2>
-          <span class="stat" id="timeline-stat"></span>
-        </div>
-        <div class="panel-sub">Drag to select a year range — filters every view below. Bar height = number of titles matching your other filters.</div>
-        <div id="timeline"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-title">
-          <h2>Score vs. audience size</h2>
-          <span class="stat" id="scatter-stat"></span>
-        </div>
-        <div class="panel-sub">Each dot is one anime. X-axis (members) is log-scaled since audience size is extremely skewed.</div>
-        <div class="panel-sub" id="zone-stat"></div>
-        <div id="scatter"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-title">
-          <h2>Where do gems come from?</h2>
-        </div>
-        <div class="panel-sub">One row per source material, dots positioned by score — same red/teal as the gem-zone brush above. Click a row to isolate it.</div>
-        <div id="source-swarm"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-title">
-          <h2>What kinds of anime end up in your gem zone?</h2>
-        </div>
-        <div class="panel-sub">Genre &rarr; format &rarr; episode length, for titles currently in your gem zone. Ribbon width = number of titles. Click a genre, format, or episode bin to isolate it — click again to clear.</div>
-        <div id="sankey"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-title">
-          <h2>Which genre &times; format combos are gems?</h2>
-        </div>
-        <div class="panel-sub">Cell shade = share of that genre/format combo currently in your gem zone. Faded cells have too few titles (under 10) to trust.</div>
-        <div id="heatmap"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-title">
-          <h2>Titles in your selection</h2>
-          <span class="stat" id="card-stat"></span>
-        </div>
-        <div class="card-grid" id="card-grid"></div>
+      <div class="dataset tone">
+        <div class="dataset-label">Dataset</div>
+        <div class="dataset-name" id="dataset-name">Loading…</div>
+        <div class="dataset-note">MyAnimeList via Kaggle, per-anime table. TV, Movie, OVA and ONA titles rated by at least 300 users, released 1970 or later. Percentiles are computed once over the full dataset.</div>
       </div>
     </div>
-  </div>
-</div>
+  </header>
 
-<div class="tooltip" id="tooltip"></div>
-<div class="modal-backdrop" id="modal-backdrop">
-  <div class="modal" id="modal"></div>
+  <div class="errbar" id="errbar" hidden></div>
+
+  <div class="body-row">
+
+    <aside class="rail">
+      <div class="rail-head">
+        <h2>Your taste</h2>
+        <button class="btn btn-ghost" id="reset-btn" type="button">Reset</button>
+      </div>
+      <p class="rail-sub">Filters narrow both charts, the Sankey and the ranking at once.</p>
+
+      <div class="rail-group">
+        <span class="eyebrow">Genre</span>
+        <div class="chips" id="genre-chips"></div>
+      </div>
+
+      <div class="rail-group">
+        <span class="eyebrow">Format</span>
+        <div class="chips" id="format-chips"></div>
+      </div>
+
+      <div class="rail-group">
+        <div class="slider-row">
+          <span class="eyebrow">Era</span>
+          <span class="slider-val" id="era-label">—</span>
+        </div>
+        <input type="range" id="year-from" step="1">
+        <input type="range" id="year-to" step="1">
+      </div>
+
+      <div class="rail-group">
+        <div class="slider-row">
+          <span class="eyebrow">Minimum score</span>
+          <span class="slider-val" id="minscore-label">any</span>
+        </div>
+        <input type="range" id="min-score" min="0" step="0.1">
+      </div>
+
+      <div class="rail-group">
+        <div class="slider-row">
+          <span class="eyebrow">Audience ceiling</span>
+          <span class="slider-val" id="maxmembers-label">—</span>
+        </div>
+        <input type="range" id="max-members" step="0.05">
+        <p class="rail-hint">Drag left to hide the blockbusters entirely.</p>
+      </div>
+
+      <hr class="hr">
+      <div class="counters">
+        <div>
+          <div class="counter-num" id="count-shown">0</div>
+          <div class="counter-label">In view</div>
+        </div>
+        <div>
+          <div class="counter-num accent" id="count-gems">0</div>
+          <div class="counter-label">Underseen</div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <section class="section">
+        <div class="sec-head">
+          <div class="sec-head-lede">
+            <h2>Score against audience size</h2>
+            <p class="sec-sub">Each mark is one title. Horizontal is audience on a log scale, vertical is score. The red field is the underseen quadrant: top 30% by score, bottom 40% by audience. Hover for detail, click to open a title.</p>
+          </div>
+          <div class="sec-status" id="scatter-status"></div>
+        </div>
+        <div class="scatter-host" id="scatter"></div>
+      </section>
+
+      <div class="split">
+        <section class="section">
+          <h2>Where the gems hide</h2>
+          <p class="sec-sub" id="heat-note" style="margin-bottom:var(--space-4)"></p>
+          <div class="heat-host" id="heatmap"></div>
+          <div class="legend-row">
+            <div class="legend-cap">0%</div>
+            <div class="legend-bar"></div>
+            <div class="legend-cap" id="heat-max-label">gem rate</div>
+          </div>
+          <p class="footnote">Hatched cells hold fewer than five titles and are left blank rather than shown as noise.</p>
+        </section>
+
+        <section class="section">
+          <h2>Recommended, ranked</h2>
+          <p class="sec-sub" id="rank-note" style="margin-bottom:var(--space-4)"></p>
+          <div class="rank-list" id="rank-list"></div>
+          <p class="rank-empty" id="rank-empty" hidden>Nothing clears the bar with these filters. Loosen the minimum score or widen the era.</p>
+        </section>
+      </div>
+
+      <section class="section">
+        <div class="sec-head">
+          <div class="sec-head-lede">
+            <h2>What kinds of anime are underseen?</h2>
+            <p class="sec-sub">Genre, then format, then episode length, for the titles in the underseen quadrant under your current filters. Ribbon width is the number of titles. Click a genre or format node to filter everything to it.</p>
+          </div>
+          <div class="sec-status" id="sankey-status"></div>
+        </div>
+        <div class="sankey-host" id="sankey"></div>
+      </section>
+
+      <section class="method">
+        <h2>How the index works</h2>
+        <div class="method-cols">
+          <p>Every title gets two percentile ranks across the whole dataset: one for score, one for audience size. The <strong>underseen index</strong> is the first minus the second. A title in the 95th percentile for score but the 20th for audience scores 75; a blockbuster with a mediocre score goes negative.</p>
+          <p>Ranking by index alone surfaces obscurity for its own sake, so when you select genres the list re-ranks on <strong>index times taste match</strong>, the share of your selected genres a title carries. Percentiles are computed once on the full dataset, so filtering changes what you see, never where a title sits.</p>
+          <p>Score is a crowd average and thin vote counts are volatile, so an obscure title rated 9 by a few hundred people is a weaker signal than the index implies. Treat the quadrant as a shortlist, not a verdict.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="drawer-root"></div>
 </div>
 <script type="module" src="/index.js"></script>
 </body>
