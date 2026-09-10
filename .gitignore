@@ -1,0 +1,12 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+
+# OS files
+.DS_Store
+
+# Raw MyAnimeList dataset from Kaggle (see README for the download link).
+# Too large for git. Only the pre-built subset data/anime_data.json is tracked.
+data/*.csv

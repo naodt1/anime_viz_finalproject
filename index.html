@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Hidden Gem Finder — MAL Dataset</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1>Hidden gem finder</h1>
+    <p>Anime that scores well but hasn't reached a wide audience yet. Drag a box on the scatterplot to define your own "gem zone" — everything below updates to match. Data: MyAnimeList, filtered to titles with 300+ ratings.</p>
+  </div>
+
+  <div class="layout">
+    <div class="sidebar">
+      <div class="filter-group">
+        <h3>Genre</h3>
+        <div class="chip-row" id="genre-filter"></div>
+      </div>
+      <div class="filter-group">
+        <h3>Format</h3>
+        <div class="chip-row" id="format-filter"></div>
+      </div>
+      <div class="filter-group">
+        <h3>Episodes</h3>
+        <div class="range-row">
+          <input type="number" id="ep-min" step="1" min="1">
+          <span>to</span>
+          <input type="number" id="ep-max" step="1" min="1">
+        </div>
+      </div>
+      <button class="reset-btn" id="reset-filters">Reset filters</button>
+    </div>
+
+    <div class="main">
+      <div class="panel">
+        <div class="panel-title">
+          <h2>Release era</h2>
+          <span class="stat" id="timeline-stat"></span>
+        </div>
+        <div class="panel-sub">Drag to select a year range — filters every view below. Bar height = number of titles matching your other filters.</div>
+        <div id="timeline"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">
+          <h2>Score vs. audience size</h2>
+          <span class="stat" id="scatter-stat"></span>
+        </div>
+        <div class="panel-sub">Each dot is one anime. X-axis (members) is log-scaled since audience size is extremely skewed.</div>
+        <div class="panel-sub" id="zone-stat"></div>
+        <div id="scatter"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">
+          <h2>Where do gems come from?</h2>
+        </div>
+        <div class="panel-sub">One row per source material, dots positioned by score — same red/teal as the gem-zone brush above. Click a row to isolate it.</div>
+        <div id="source-swarm"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">
+          <h2>What kinds of anime end up in your gem zone?</h2>
+        </div>
+        <div class="panel-sub">Genre &rarr; format &rarr; episode length, for titles currently in your gem zone. Ribbon width = number of titles. Click a genre, format, or episode bin to isolate it — click again to clear.</div>
+        <div id="sankey"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">
+          <h2>Which genre &times; format combos are gems?</h2>
+        </div>
+        <div class="panel-sub">Cell shade = share of that genre/format combo currently in your gem zone. Faded cells have too few titles (under 10) to trust.</div>
+        <div id="heatmap"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">
+          <h2>Titles in your selection</h2>
+          <span class="stat" id="card-stat"></span>
+        </div>
+        <div class="card-grid" id="card-grid"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal" id="modal"></div>
+</div>
+<script type="module" src="/index.js"></script>
+</body>
+</html>
