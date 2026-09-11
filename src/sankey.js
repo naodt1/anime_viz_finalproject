@@ -1,6 +1,6 @@
 import * as d3 from 'd3';
 import { sankey, sankeyLinkHorizontal } from 'd3-sankey';
-import { State, isGem, filteredTitles, setFilter } from './state.js';
+import { State, isGem, filteredTitles, selectionScopedTitles, setFilter } from './state.js';
 import { tipFor } from './tip.js';
 import { EPISODE_BINS } from './episodeBins.js';
 
@@ -36,7 +36,9 @@ export function drawSankey() {
   if (!host || !s.titles.length) return;
 
   const W = host.clientWidth || 900;
-  const rows = filteredTitles().filter(isGem);
+  // A box-select on the scatter overrides the default "gem zone" scoping
+  // with exactly what was dragged over, gems or not.
+  const rows = s.brushIds.length ? selectionScopedTitles() : filteredTitles().filter(isGem);
   gemCount = rows.length;
 
   d3.select(host).selectAll('svg').remove();
@@ -45,7 +47,7 @@ export function drawSankey() {
   if (rows.length === 0) {
     svg.attr('height', 80).append('text').attr('x', 4).attr('y', 30)
       .attr('class', 'sankey-col-label')
-      .text('No hidden gems under the current filters.');
+      .text(s.brushIds.length ? 'No titles in your current selection.' : 'No hidden gems under the current filters.');
     return;
   }
 

@@ -1,4 +1,4 @@
-import { State, isGem, filteredTitles, setState, setFilter, onRender } from './state.js';
+import { State, isGem, filteredTitles, selectionScopedTitles, setState, setFilter, onRender } from './state.js';
 import { loadData } from './data.js';
 import { initScatter, drawScatter, scatterPlottedCount } from './scatter.js';
 import { initHeatmap, drawHeatmap, heatMaxRate } from './heatmap.js';
@@ -42,8 +42,13 @@ function toggle(list, name) {
 
 function rankedRows() {
   const sel = State.genres;
-  const scored = filteredTitles()
-    .filter((t) => t.gem > 0 && t.sp >= 60)
+  // A box-select on the scatter overrides the default "clears the bar"
+  // candidate pool with exactly what was dragged over, gems or not — the
+  // point of selecting a region is to compare what's actually in it.
+  const pool = State.brushIds.length
+    ? selectionScopedTitles()
+    : filteredTitles().filter((t) => t.gem > 0 && t.sp >= 60);
+  const scored = pool
     .map((t) => {
       const match = sel.length ? t.genres.filter((g) => sel.indexOf(g) >= 0).length / sel.length : null;
       const rank = t.gem * (match === null ? 1 : 0.45 + 0.55 * Math.min(1, match));
@@ -186,18 +191,27 @@ function render() {
   drawSankey();
 
   const plotted = scatterPlottedCount();
-  $('scatter-status').textContent = plotted && plotted < rows.length
-    ? `showing ${plotted.toLocaleString()} of ${rows.length.toLocaleString()} marks`
-    : `${rows.length.toLocaleString()} titles plotted`;
+  $('scatter-status').textContent = s.brushIds.length
+    ? `${s.brushIds.length.toLocaleString()} selected — Esc to clear`
+    : plotted && plotted < rows.length
+      ? `showing ${plotted.toLocaleString()} of ${rows.length.toLocaleString()} marks`
+      : `${rows.length.toLocaleString()} titles plotted`;
 
   $('heat-note').textContent = 'Share of titles in each genre and era that land in the gem zone. Click a cell to filter everything to that genre and decade.';
   $('heat-max-label').textContent = `gem rate ${Math.round((heatMaxRate() || 0) * 100)}%`;
 
-  $('rank-note').textContent = s.genres.length
-    ? `Ranked by gem index weighted by how well each title matches ${s.genres.join(' / ')}.`
-    : 'Ranked by gem index. Pick genres on the left to re-rank on taste match.';
+  $('rank-note').textContent = s.brushIds.length
+    ? `Showing your ${s.brushIds.length.toLocaleString()} selected titles, ranked by gem index.`
+    : s.genres.length
+      ? `Ranked by gem index weighted by how well each title matches ${s.genres.join(' / ')}.`
+      : 'Ranked by gem index. Pick genres on the left to re-rank on taste match.';
 
-  $('sankey-status').textContent = `${sankeyGemCount().toLocaleString()} hidden gems`;
+  $('sankey-note').textContent = s.brushIds.length
+    ? 'Genre, then format, then episode length, for the titles you selected on the scatter above. Ribbon width is the number of titles.'
+    : 'Genre, then format, then episode length, for the titles in the gem zone under your current filters. Ribbon width is the number of titles. Click a genre or format node to filter everything to it.';
+  $('sankey-status').textContent = s.brushIds.length
+    ? `${sankeyGemCount().toLocaleString()} selected titles`
+    : `${sankeyGemCount().toLocaleString()} hidden gems`;
 
   renderRankList();
   renderDrawer();
@@ -221,7 +235,9 @@ function initApp() {
   }));
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && State.selId) setState({ selId: null });
+    if (e.key === 'Escape' && (State.selId || State.brushIds.length)) {
+      setState({ selId: null, brushIds: [] });
+    }
   });
 
   // Redraw only the charts on resize (cheap), debounced through rAF, skipping

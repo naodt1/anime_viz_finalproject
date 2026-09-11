@@ -16,6 +16,7 @@ export const State = {
   minScore: 0,
   maxMembersLog: 7,      // slider works in log10(members)
   selId: null,           // drawer subject
+  brushIds: [],          // ids selected by dragging a box on the scatter
 
   // ingest-derived constants
   scoreMax: 10,
@@ -41,10 +42,11 @@ export function setState(patch) {
   renderFn();
 }
 
-// A filter change. Every filter interaction also clears the current selection,
-// matching the design's `set` helper.
+// A filter change. Every filter interaction also clears the current
+// selection, matching the design's `set` helper — the box-select on the
+// scatter is a selection too, so a filter change clears it the same way.
 export function setFilter(patch) {
-  Object.assign(State, patch, { selId: null });
+  Object.assign(State, patch, { selId: null, brushIds: [] });
   renderFn();
 }
 
@@ -64,4 +66,15 @@ export function filteredTitles() {
     if (s.genres.length && !t.genres.some((g) => s.genres.indexOf(g) >= 0)) return false;
     return true;
   });
+}
+
+// filteredTitles(), narrowed further to the scatter's box-select when one is
+// active. The Sankey and ranked list read this instead of filteredTitles()
+// so a manual selection on the scatter overrides their default "gem zone"
+// scoping with "exactly what you dragged over".
+export function selectionScopedTitles() {
+  const rows = filteredTitles();
+  if (!State.brushIds.length) return rows;
+  const ids = new Set(State.brushIds);
+  return rows.filter((t) => ids.has(t.id));
 }

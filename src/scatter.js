@@ -9,8 +9,40 @@ const CAP = 2600; // above this many filtered rows, sample for DOM sanity
 let host;
 let plottedCount = 0;
 
+// Brush lives at module scope so it survives across redraws: it is created
+// once and only re-extented/re-called, never rebuilt, or an in-progress
+// selection box would vanish every time a filter change triggers a render.
+// scaleX/scaleY are likewise kept live so brushed() always reads whatever
+// scale drawScatter last computed, even though the event fires later, well
+// after that render call has returned.
+let brush;
+let brushG;
+let scaleX;
+let scaleY;
+
 export function initScatter(el) {
   host = el;
+}
+
+// Only a real drag should update the selection — d3-brush also dispatches
+// 'end' for the .move(null) calls this module makes to clear the box
+// programmatically, and those carry no sourceEvent.
+function brushed(event) {
+  if (!event.sourceEvent) return;
+  const sel = event.selection;
+  if (!sel) {
+    if (State.brushIds.length) setState({ brushIds: [], selId: null });
+    return;
+  }
+  const [[x0, y0], [x1, y1]] = sel;
+  const ids = filteredTitles()
+    .filter((d) => {
+      const px = scaleX(d.members);
+      const py = scaleY(d.score);
+      return px >= x0 && px <= x1 && py >= y0 && py <= y1;
+    })
+    .map((d) => d.id);
+  setState({ brushIds: ids, selId: null });
 }
 
 export function scatterPlottedCount() {
@@ -29,6 +61,8 @@ export function drawScatter() {
 
   const x = d3.scaleLog().domain([Math.max(10, s.memMin), Math.max(100, s.memMax)]).range([0, iw]).clamp(true);
   const y = d3.scaleLinear().domain([s.yLo, s.yHi]).range([ih, 0]).clamp(true);
+  scaleX = x;
+  scaleY = y;
 
   let svg = d3.select(host).select('svg.sc');
   if (svg.empty()) {
@@ -42,9 +76,20 @@ export function drawScatter() {
     g.append('g').attr('class', 'ax gx');
     g.append('g').attr('class', 'ax gy');
     g.append('g').attr('class', 'grid');
+    // The brush's own <g> sits between the grid and the dots: dots painted
+    // after it stay clickable/hoverable on top even once a selection box
+    // exists, while dragging from any empty patch of canvas still reaches
+    // the brush's overlay underneath.
+    brush = d3.brush().on('end', brushed);
+    brushG = g.append('g').attr('class', 'brush');
     g.append('g').attr('class', 'dots');
     svg.append('text').attr('class', 'xlab');
     svg.append('text').attr('class', 'ylab');
+  }
+  brush.extent([[0, 0], [iw, ih]]);
+  brushG.call(brush);
+  if (!s.brushIds.length && d3.brushSelection(brushG.node())) {
+    brushG.call(brush.move, null);
   }
   if (+svg.attr('width') !== W) svg.attr('width', W);
   if (+svg.attr('height') !== H) svg.attr('height', H);
@@ -99,21 +144,23 @@ export function drawScatter() {
     .style('font', '800 11px var(--font-heading)').style('letter-spacing', '0.1em')
     .style('fill', 'var(--color-neutral-700)').text('SCORE →');
 
-  // sample above the cap, always keeping every gem
+  // sample above the cap, always keeping every gem and every brushed point
+  const brushSet = new Set(s.brushIds);
+  const keepAlways = (d) => isGem(d) || brushSet.has(d.id);
   let plot = rows;
   if (rows.length > CAP) {
-    const gems = rows.filter(isGem);
-    const rest = rows.filter((t) => !isGem(t));
-    const keep = Math.max(0, CAP - Math.min(gems.length, CAP));
+    const kept = rows.filter(keepAlways);
+    const rest = rows.filter((t) => !keepAlways(t));
+    const keep = Math.max(0, CAP - Math.min(kept.length, CAP));
     const step = rest.length / Math.max(1, keep);
     const samp = [];
     for (let i = 0; i < keep; i++) samp.push(rest[Math.floor(i * step)]);
-    plot = gems.slice(0, CAP).concat(samp);
+    plot = kept.slice(0, CAP).concat(samp);
   }
   plottedCount = plot.length;
 
   const tip = tipFor(host);
-  const size = (d) => (s.selId === d.id ? 16 : isGem(d) ? 9 : 6);
+  const size = (d) => (s.selId === d.id ? 16 : isGem(d) || brushSet.has(d.id) ? 9 : 6);
   const dots = g.select('g.dots').selectAll('rect').data(plot, (d) => d.id);
   dots.exit().remove();
   dots.enter().append('rect')
@@ -134,12 +181,15 @@ export function drawScatter() {
     .attr('y', (d) => y(d.score) - size(d) / 2)
     .style('cursor', 'pointer')
     .style('fill', (d) => (s.selId === d.id ? 'var(--color-text)' : isGem(d) ? 'var(--color-accent)' : 'var(--color-neutral-600)'))
-    .style('fill-opacity', (d) => (s.selId === d.id ? 1 : isGem(d) ? 0.95 : 0.45))
-    .style('stroke', (d) => (s.selId === d.id ? 'var(--color-text)' : isGem(d) ? 'var(--color-accent-700)' : 'none'))
-    .style('stroke-width', 1);
+    .style('fill-opacity', (d) => (s.selId === d.id ? 1 : isGem(d) ? 0.95 : brushSet.has(d.id) ? 0.85 : 0.45))
+    .style('stroke', (d) => (
+      s.selId === d.id ? 'var(--color-text)'
+        : brushSet.has(d.id) ? 'var(--color-text)'
+          : isGem(d) ? 'var(--color-accent-700)' : 'none'
+    ))
+    .style('stroke-width', (d) => (brushSet.has(d.id) && s.selId !== d.id ? 2 : 1));
 
-  // paint order: selected above gems above the rest
-  g.select('g.dots').selectAll('rect').sort((a, b) => (
-    (s.selId === a.id ? 2 : isGem(a) ? 1 : 0) - (s.selId === b.id ? 2 : isGem(b) ? 1 : 0)
-  ));
+  // paint order: selected above brushed above gems above the rest
+  const rank = (d) => (s.selId === d.id ? 3 : brushSet.has(d.id) ? 2 : isGem(d) ? 1 : 0);
+  g.select('g.dots').selectAll('rect').sort((a, b) => rank(a) - rank(b));
 }
