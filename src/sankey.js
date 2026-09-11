@@ -99,12 +99,31 @@ export function drawSankey() {
     links: links.map((d) => Object.assign({}, d)),
   });
 
+  const tip = tipFor(host);
+
+  // A link's own d.width is derived from d.value but rounds/clamps during
+  // layout, so read the count back off the value for the tooltip rather
+  // than trusting the rendered stroke width.
   gRoot.append('g').selectAll('path').data(graph.links).enter().append('path')
     .attr('class', 'sankey-link')
     .attr('d', sankeyLinkHorizontal())
     .attr('stroke', (d) => (d.source.stage === 0 ? genreColor(d.source.name) : '#c7cdd6'))
     .attr('stroke-opacity', 0.35)
-    .attr('stroke-width', (d) => Math.max(1, d.width));
+    .attr('stroke-width', (d) => Math.max(1, d.width))
+    .on('mouseenter', function (ev, d) {
+      d3.select(this).attr('stroke-opacity', 0.7);
+      tip.innerHTML = `<b>${d.source.name} → ${d.target.name}</b>${d.value.toLocaleString()} titles`;
+      tip.style.opacity = 1;
+    })
+    .on('mousemove', (ev) => {
+      const [px, py] = d3.pointer(ev, host);
+      tip.style.left = Math.min(px + 12, W - 250) + 'px';
+      tip.style.top = Math.max(4, py - tip.offsetHeight - 10) + 'px';
+    })
+    .on('mouseleave', function () {
+      d3.select(this).attr('stroke-opacity', 0.35);
+      tip.style.opacity = 0;
+    });
 
   const isActive = (d) => {
     if (d.stage === 0) return s.genres.indexOf(d.name) >= 0;
@@ -113,7 +132,6 @@ export function drawSankey() {
   };
 
   const nodeG = gRoot.append('g').selectAll('g').data(graph.nodes).enter().append('g').attr('class', 'sankey-node');
-  const tip = tipFor(host);
 
   nodeG.append('rect')
     .attr('x', (d) => d.x0).attr('y', (d) => d.y0)
