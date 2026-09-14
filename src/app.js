@@ -1,7 +1,7 @@
 import { State, isGem, filteredTitles, selectionScopedTitles, setState, setFilter, onRender } from './state.js';
 import { loadData } from './data.js';
 import { initScatter, drawScatter, scatterPlottedCount } from './scatter.js';
-import { initHeatmap, drawHeatmap, heatMaxRate } from './heatmap.js';
+import { initHeatmap, drawHeatmap } from './heatmap.js';
 import { initSankey, drawSankey, sankeyGemCount } from './sankey.js';
 import { escapeHtml } from './tip.js';
 import { fmtN, ord, metaLine } from './format.js';
@@ -197,8 +197,7 @@ function render() {
       ? `showing ${plotted.toLocaleString()} of ${rows.length.toLocaleString()} marks`
       : `${rows.length.toLocaleString()} titles plotted`;
 
-  $('heat-note').textContent = 'Share of titles in each genre and era that land in the gem zone. Click a cell to filter everything to that genre and decade.';
-  $('heat-max-label').textContent = `gem rate ${Math.round((heatMaxRate() || 0) * 100)}%`;
+  $('heat-note').textContent = 'Share of titles in each genre and era that land in the gem zone. Shade compares eras to themselves, not to each other — click a cell to filter everything to that genre and decade.';
 
   $('rank-note').textContent = s.brushIds.length
     ? `Showing your ${s.brushIds.length.toLocaleString()} selected titles, ranked by gem index.`

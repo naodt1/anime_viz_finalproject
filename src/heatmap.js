@@ -8,14 +8,9 @@ const TOP = 20;
 const LOW_N = 5;
 
 let host;
-let heatMax = 0;
 
 export function initHeatmap(el) {
   host = el;
-}
-
-export function heatMaxRate() {
-  return heatMax;
 }
 
 function eras() {
@@ -56,14 +51,20 @@ export function drawHeatmap() {
   const cw = Math.max(28, (W - L - GAP * es.length) / es.length);
   const H = TOP + genres.length * (RH + GAP);
 
-  // cell rate is computed over the FULL dataset, not the filtered subset
+  // Cell rate is computed over the FULL dataset, not the filtered subset.
+  // Shade is normalized per column (era), not against the matrix-wide max:
+  // eras differ enormously in absolute gem rate (a sparse pre-90 slate reads
+  // pale next to a crowded 2020s one under a single global scale even when
+  // pre-90 has real internal variation worth seeing), so each column's own
+  // highest-rate cell gets the darkest shade. The cell's printed percentage
+  // is always the true, un-normalized rate — only the fill color is relative.
   const cells = [];
-  heatMax = 0;
+  const colMax = es.map(() => 0);
   genres.forEach((k, r) => es.forEach((e, c) => {
     const inCell = s.titles.filter((t) => t.genres.indexOf(k) >= 0 && t.year && t.year >= e.lo && t.year <= e.hi);
     const gems = inCell.filter(isGem).length;
     const rate = inCell.length >= LOW_N ? gems / inCell.length : null;
-    if (rate !== null && rate > heatMax) heatMax = rate;
+    if (rate !== null && rate > colMax[c]) colMax[c] = rate;
     cells.push({ k, e, r, c, n: inCell.length, gems, rate });
   }));
 
@@ -131,12 +132,13 @@ export function drawHeatmap() {
         yearTo: on ? s.yearCeil : Math.min(s.yearCeil, d.e.hi),
       });
     });
+  const normalized = (d) => (colMax[d.c] ? d.rate / colMax[d.c] : 0);
   all.select('rect').attr('width', cw).attr('height', RH)
-    .style('fill', (d) => (d.rate === null ? 'url(#hatch)' : shade(heatMax ? d.rate / heatMax : 0)))
+    .style('fill', (d) => (d.rate === null ? 'url(#hatch)' : shade(normalized(d))))
     .style('stroke', (d) => (isActive(d.k, d.e) ? 'var(--color-text)' : 'none'))
     .style('stroke-width', 2);
   all.select('text').attr('x', 6).attr('y', RH / 2 + 4)
     .style('font', '800 11px var(--font-heading)')
-    .style('fill', (d) => (d.rate !== null && heatMax && d.rate / heatMax >= 0.8 ? 'var(--color-neutral-100)' : 'var(--color-text)'))
+    .style('fill', (d) => (d.rate !== null && normalized(d) >= 0.8 ? 'var(--color-neutral-100)' : 'var(--color-text)'))
     .text((d) => (d.rate === null ? '' : Math.round(d.rate * 100) + '%'));
 }
