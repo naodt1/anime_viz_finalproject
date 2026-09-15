@@ -207,7 +207,7 @@ function render() {
 
   $('sankey-note').textContent = s.brushIds.length
     ? 'Genre, then format, then episode length, for the titles you selected on the scatter above. Ribbon width is the number of titles.'
-    : 'Genre, then format, then episode length, for the titles in the gem zone under your current filters. Ribbon width is the number of titles. Click a genre or format node to filter everything to it.';
+    : 'Genre, then format, then episode length, for the titles in the gem zone under your current filters. Ribbon width is the number of titles. Click any node to filter everything to it.';
   $('sankey-status').textContent = s.brushIds.length
     ? `${sankeyGemCount().toLocaleString()} selected titles`
     : `${sankeyGemCount().toLocaleString()} hidden gems`;
@@ -228,7 +228,7 @@ function initApp() {
   $('min-score').addEventListener('input', (e) => setFilter({ minScore: +e.target.value }));
   $('max-members').addEventListener('input', (e) => setFilter({ maxMembersLog: +e.target.value }));
   $('reset-btn').addEventListener('click', () => setFilter({
-    genres: [], formats: [], minScore: 0,
+    genres: [], formats: [], episodeBins: [], minScore: 0,
     maxMembersLog: Math.log10(State.memMax) + 0.05,
     yearFrom: State.yearFloor, yearTo: State.yearCeil,
   }));

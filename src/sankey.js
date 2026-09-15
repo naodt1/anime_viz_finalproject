@@ -1,6 +1,6 @@
 import * as d3 from 'd3';
 import { sankey, sankeyLinkHorizontal } from 'd3-sankey';
-import { State, isGem, filteredTitles, selectionScopedTitles, setFilter } from './state.js';
+import { State, isGem, filteredTitles, selectionScopedTitles, sankeyBaseTitles, setFilter } from './state.js';
 import { tipFor } from './tip.js';
 import { EPISODE_BINS } from './episodeBins.js';
 
@@ -19,9 +19,14 @@ export function sankeyGemCount() {
   return gemCount;
 }
 
-// Golden-angle hue steps so genres near each other in frequency rank don't
-// collide, from the original Hidden Gem build.
-const genreColor = d3.scaleOrdinal();
+// On-brand red/teal/ochre/neutral palette, cycling families so adjacent
+// genres never share a hue. 12 slots for the genre cap below.
+const GENRE_PALETTE = [
+  '#ff563c', '#5fb8ac', '#e0a83e', '#2d2b2b', // accent-500, teal-light, ochre-light, neutral-900
+  '#7c1405', '#1f7a6c', '#a8781f', '#9b9797', // accent-800, teal-mid, ochre-mid, neutral-500
+  '#ff9783', '#0d4a40', '#6b4d14', '#605d5d', // accent-400, teal-dark, ochre-dark, neutral-700
+];
+const genreColor = d3.scaleOrdinal().range(GENRE_PALETTE);
 
 function orderedValues(rows, key, preferred) {
   const counts = new Map();
@@ -38,8 +43,12 @@ export function drawSankey() {
   const W = host.clientWidth || 900;
   // A box-select on the scatter overrides the default "gem zone" scoping
   // with exactly what was dragged over, gems or not.
-  const rows = s.brushIds.length ? selectionScopedTitles() : filteredTitles().filter(isGem);
-  gemCount = rows.length;
+  const activeRows = s.brushIds.length ? selectionScopedTitles() : filteredTitles().filter(isGem);
+  gemCount = activeRows.length;
+
+  // Structure (nodes/order/colors) comes from sankeyBaseTitles(), not
+  // activeRows, so clicking a node doesn't rebuild the chart around itself.
+  const rows = s.brushIds.length ? selectionScopedTitles() : sankeyBaseTitles().filter(isGem);
 
   d3.select(host).selectAll('svg').remove();
   const svg = d3.select(host).append('svg').attr('width', W);
@@ -59,7 +68,7 @@ export function drawSankey() {
   svg.attr('height', H);
   const gRoot = svg.append('g');
 
-  genreColor.domain(genres).range(genres.map((_, i) => d3.interpolateRainbow((i * 0.618033988749895) % 1)));
+  genreColor.domain(genres);
 
   const stages = [
     { key: 'primaryGenre', values: genres },
@@ -78,19 +87,22 @@ export function drawSankey() {
     });
   });
 
+  // Keyed by the full genre+format+episodeBin triple, not just the node
+  // pair, so each link keeps its title identity across both hops.
   const linkCounts = [new Map(), new Map()];
   rows.forEach((d) => {
     const path = [d.primaryGenre, d.format, d.episodeBin];
     for (let i = 0; i < 2; i++) {
-      const key = `${i}::${path[i]}->${i + 1}::${path[i + 1]}`;
+      const key = `${d.primaryGenre}|${d.format}|${d.episodeBin}|${i}::${path[i]}->${i + 1}::${path[i + 1]}`;
       linkCounts[i].set(key, (linkCounts[i].get(key) || 0) + 1);
     }
   });
   const links = [];
   linkCounts.forEach((map) => map.forEach((count, key) => {
-    const [a, b] = key.split('->');
+    const [genre, format, episodeBin, pair] = key.split('|');
+    const [a, b] = pair.split('->');
     if (nodeIndex.has(a) && nodeIndex.has(b)) {
-      links.push({ source: nodeIndex.get(a), target: nodeIndex.get(b), value: count });
+      links.push({ source: nodeIndex.get(a), target: nodeIndex.get(b), value: count, genre, format, episodeBin });
     }
   }));
 
@@ -103,17 +115,25 @@ export function drawSankey() {
 
   const tip = tipFor(host);
 
+  // Dim a link unless it matches every active filter (genre/format/episode).
+  const linkOpacity = (d) => {
+    if (s.genres.length && s.genres.indexOf(d.genre) < 0) return 0.08;
+    if (s.formats.length && s.formats.indexOf(d.format) < 0) return 0.08;
+    if (s.episodeBins.length && s.episodeBins.indexOf(d.episodeBin) < 0) return 0.08;
+    return 0.35;
+  };
+
   // A link's own d.width is derived from d.value but rounds/clamps during
   // layout, so read the count back off the value for the tooltip rather
   // than trusting the rendered stroke width.
   gRoot.append('g').selectAll('path').data(graph.links).enter().append('path')
     .attr('class', 'sankey-link')
     .attr('d', sankeyLinkHorizontal())
-    .attr('stroke', (d) => (d.source.stage === 0 ? genreColor(d.source.name) : '#c7cdd6'))
-    .attr('stroke-opacity', 0.35)
+    .attr('stroke', (d) => (genres.indexOf(d.genre) >= 0 ? genreColor(d.genre) : '#bab6b6'))
+    .attr('stroke-opacity', linkOpacity)
     .attr('stroke-width', (d) => Math.max(1, d.width))
     .on('mouseenter', function (ev, d) {
-      d3.select(this).attr('stroke-opacity', 0.7);
+      d3.select(this).attr('stroke-opacity', Math.min(0.85, linkOpacity(d) + 0.35));
       tip.innerHTML = `<b>${d.source.name} → ${d.target.name}</b>${d.value.toLocaleString()} titles`;
       tip.style.opacity = 1;
     })
@@ -122,16 +142,25 @@ export function drawSankey() {
       tip.style.left = Math.min(px + 12, W - 250) + 'px';
       tip.style.top = Math.max(4, py - tip.offsetHeight - 10) + 'px';
     })
-    .on('mouseleave', function () {
-      d3.select(this).attr('stroke-opacity', 0.35);
+    .on('mouseleave', function (ev, d) {
+      d3.select(this).attr('stroke-opacity', linkOpacity(d));
       tip.style.opacity = 0;
     });
 
   const isActive = (d) => {
     if (d.stage === 0) return s.genres.indexOf(d.name) >= 0;
     if (d.stage === 1) return s.formats.indexOf(d.name) >= 0;
-    return false;
+    return s.episodeBins.indexOf(d.name) >= 0;
   };
+  const anyFilterActive = s.genres.length + s.formats.length + s.episodeBins.length > 0;
+
+  // Multi-select toggle, shared across all three stages.
+  const FILTER_KEY = ['genres', 'formats', 'episodeBins'];
+  function toggleStage(stage, name) {
+    const key = FILTER_KEY[stage];
+    const cur = s[key];
+    setFilter({ [key]: cur.indexOf(name) >= 0 ? cur.filter((x) => x !== name) : cur.concat([name]) });
+  }
 
   const nodeG = gRoot.append('g').selectAll('g').data(graph.nodes).enter().append('g').attr('class', 'sankey-node');
 
@@ -140,8 +169,8 @@ export function drawSankey() {
     .attr('width', (d) => d.x1 - d.x0)
     .attr('height', (d) => Math.max(1, d.y1 - d.y0))
     .attr('fill', (d) => (d.stage === 0 ? genreColor(d.name) : 'var(--color-neutral-500)'))
-    .attr('fill-opacity', (d) => (s.genres.length + s.formats.length === 0 || isActive(d) ? 1 : 0.3))
-    .style('cursor', (d) => (d.stage === 2 ? 'default' : 'pointer'))
+    .attr('fill-opacity', (d) => (!anyFilterActive || isActive(d) ? 1 : 0.3))
+    .style('cursor', 'pointer')
     .on('mouseenter', (ev, d) => {
       tip.innerHTML = `<b>${d.name}</b>${d.value.toLocaleString()} titles`;
       tip.style.opacity = 1;
@@ -149,15 +178,7 @@ export function drawSankey() {
       tip.style.top = d.y0 + 'px';
     })
     .on('mouseleave', () => { tip.style.opacity = 0; })
-    .on('click', (ev, d) => {
-      if (d.stage === 0) {
-        const cur = s.genres;
-        setFilter({ genres: cur.indexOf(d.name) >= 0 ? cur.filter((x) => x !== d.name) : cur.concat([d.name]) });
-      } else if (d.stage === 1) {
-        const cur = s.formats;
-        setFilter({ formats: cur.indexOf(d.name) >= 0 ? cur.filter((x) => x !== d.name) : cur.concat([d.name]) });
-      }
-    });
+    .on('click', (ev, d) => toggleStage(d.stage, d.name));
 
   const LABEL_MIN = 9;
   nodeG.filter((d) => d.y1 - d.y0 >= LABEL_MIN).append('text')

@@ -11,6 +11,7 @@ export const State = {
   // filters
   genres: [],            // multi-select, OR
   formats: [],           // multi-select, OR
+  episodeBins: [],       // multi-select, OR
   yearFrom: null,
   yearTo: null,
   minScore: 0,
@@ -54,18 +55,34 @@ export function isGem(t) {
   return t.sp >= 70 && t.mp <= 40;
 }
 
+// Era/score/audience only — shared by filteredTitles() and sankeyBaseTitles().
+function matchesEraScoreAudience(t, s) {
+  const maxM = Math.pow(10, s.maxMembersLog);
+  if (t.score < s.minScore || t.members > maxM) return false;
+  if (t.year && (t.year < s.yearFrom || t.year > s.yearTo)) return false;
+  return true;
+}
+
 // The predicate from the design README, all conjunctive with genre/format
-// internally disjunctive. Undated titles are never excluded by the era filter.
+// internally disjunctive. Undated titles are never excluded by the era
+// filter. episodeBins follows the same shape, set from the sankey.
 export function filteredTitles() {
   const s = State;
-  const maxM = Math.pow(10, s.maxMembersLog);
   return s.titles.filter((t) => {
-    if (t.score < s.minScore || t.members > maxM) return false;
-    if (t.year && (t.year < s.yearFrom || t.year > s.yearTo)) return false;
+    if (!matchesEraScoreAudience(t, s)) return false;
     if (s.formats.length && s.formats.indexOf(t.format) < 0) return false;
     if (s.genres.length && !t.genres.some((g) => s.genres.indexOf(g) >= 0)) return false;
+    if (s.episodeBins.length && s.episodeBins.indexOf(t.episodeBin) < 0) return false;
     return true;
   });
+}
+
+// filteredTitles() minus genre/format/episode. The sankey builds its node
+// list and colors from this so clicking a node doesn't rebuild the chart
+// around its own output — it dims in place instead.
+export function sankeyBaseTitles() {
+  const s = State;
+  return s.titles.filter((t) => matchesEraScoreAudience(t, s));
 }
 
 // filteredTitles(), narrowed further to the scatter's box-select when one is
